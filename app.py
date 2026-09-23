@@ -233,13 +233,13 @@ pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares. Pronósti
 def descargas(nombre, funcion, *args):
     """Botones PNG (600 dpi) y PDF; el archivo se dibuja recién al apretar."""
     base = f"visor_lluvia_valdivia_{nombre}_{t_obs:%Y%m%d_%H%M}"
-    c1, c2, _ = st.columns([1, 1, 3])
-    for col, fmt, mime in ((c1, "png", "image/png"), (c2, "pdf", "application/pdf")):
-        col.download_button(
+    fila = st.container(horizontal=True, gap="small")
+    for fmt, mime in (("png", "image/png"), ("pdf", "application/pdf")):
+        fila.download_button(
             f"{fmt.upper()}" + (" 600 dpi" if fmt == "png" else ""),
             data=lambda fmt=fmt: funcion(fmt, *args), file_name=f"{base}.{fmt}",
             mime=mime, icon=":material/download:", on_click="ignore",
-            key=f"dl_{nombre}_{fmt}", width="stretch")
+            key=f"dl_{nombre}_{fmt}")
 
 
 # ------------------------------------------------------------------ graficos
@@ -273,9 +273,9 @@ with col_graf:
                                 line=dict(color=colg, width=2.4),
                                 name=f"observado* {nombre}"))
     fa.add_vline(x=ahora, line_color=ROJO, line_width=1.5)
-    fa.update_layout(title="Precipitación por hora (mm)", height=300,
+    fa.update_layout(title="Precipitación por hora (mm)", height=360,
                      margin=dict(l=10, r=10, t=40, b=10), bargap=.15,
-                     legend=dict(orientation="h", y=-.2), hovermode="x unified")
+                     legend=dict(orientation="h", y=-.3, yanchor="top"), hovermode="x unified")
     fa.update_xaxes(**EJE_T)
     st.plotly_chart(fa, config=barra("resetScale2d"))
     descargas("por_hora", G.por_hora, ts, p10, p90, med, obs_h, ahora,
