@@ -32,6 +32,14 @@ ESRI = ("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
 ESCALA_MAPA = [(25, "#FFF3B0"), (50, "#B8E186"), (75, "#41B6C4"),
                (100, "#2C7FB8"), (150, "#8856A7"), (np.inf, "#E7298A")]
 
+
+
+def barra(boton):
+    """Barra de Plotly con solo el botón para volver al zoom inicial (siempre
+    visible: en el celular no hay "pasar el mouse")."""
+    return {"displayModeBar": True, "displaylogo": False, "modeBarButtons": [[boton]]}
+
+
 # ajustes para celular: métricas en 2x2 y botones de estación en varias filas
 st.markdown("""<style>
 [data-testid="stButtonGroup"], [data-testid="stButtonGroup"] > div { flex-wrap: wrap; }
@@ -185,9 +193,10 @@ with col_mapa:
         map=dict(style="white-bg", center=dict(lat=-39.80, lon=-73.32), zoom=8.3,
                  layers=[dict(sourcetype="raster", source=[ESRI], below="traces")]),
         margin=dict(l=0, r=0, t=0, b=0), height=440, showlegend=False,
+        modebar=dict(bgcolor="rgba(255,255,255,.9)", color="#333", activecolor="#000"),
         clickmode="event+select")
     evento = st.plotly_chart(fmap, on_select="rerun", selection_mode="points",
-                             key="mapa", config={"displayModeBar": False})
+                             key="mapa", config=barra("resetViewMap"))
     st.caption("Colores: < 25 · 25–50 · 50–75 · 75–100 · 100–150 · > 150 mm. "
                "Imagen: Esri World Imagery.")
 
@@ -242,7 +251,7 @@ with col_graf:
                      margin=dict(l=10, r=10, t=40, b=10), bargap=.15,
                      legend=dict(orientation="h", y=-.2), hovermode="x unified")
     fa.update_xaxes(**EJE_T)
-    st.plotly_chart(fa, config={"displayModeBar": False})
+    st.plotly_chart(fa, config=barra("resetScale2d"))
 
     # (b) acumulado
     fb = go.Figure()
@@ -264,7 +273,7 @@ with col_graf:
                      height=290, margin=dict(l=10, r=10, t=60, b=10),
                      showlegend=False, hovermode="x unified")
     fb.update_xaxes(**EJE_T)
-    st.plotly_chart(fb, config={"displayModeBar": False})
+    st.plotly_chart(fb, config=barra("resetScale2d"))
 
 # ------------------------------------------------------------------ tarjetas 6 h
 st.markdown("**Lluvia esperada cada 6 horas** (mediana del pronóstico; rango p10–p90)")
