@@ -49,4 +49,6 @@ La app se duerme tras unos días sin visitas; la primera visita la despierta.
 ## Ajustes frecuentes
 
 - Estaciones, grupos y colores: `ESTACIONES` y `GRUPOS` en `fuentes.py`.
-- Fechas del evento: barra lateral (por defecto 22/09 12:00 → 25/09 00:00).
+- Período: barra lateral. Horizontes rápidos (últimas y próximas 12, 24, 36 o 72 h;
+  72 h es lo que cubren VIPNet y el ensamble) o fechas del evento (por defecto
+  22/09 12:00 → 25/09 00:00).

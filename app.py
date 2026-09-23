@@ -117,13 +117,32 @@ def logo_lab(ancho=230):
 
 
 # ------------------------------------------------------------------ barra lateral
+HORIZONTES = [12, 24, 36, 72]      # h; 72 = lo que cubren VIPNet (atrás) y el ensamble
+
 with st.sidebar:
     st.markdown("### Ajustes")
-    d0 = st.date_input("Inicio del evento", datetime(2026, 9, 22))
-    h0 = st.time_input("Hora de inicio", datetime(2026, 9, 22, 12, 0).time())
-    d1 = st.date_input("Fin del evento", datetime(2026, 9, 25))
-    inicio = pd.Timestamp(datetime.combine(d0, h0))
-    fin = pd.Timestamp(datetime.combine(d1, datetime.min.time()))
+    st.markdown("**Horizontes rápidos**")
+    atras = st.segmented_control("Hacia atrás (últimas)", HORIZONTES, key="atras",
+                                 format_func=lambda h: f"{h} h")
+    adelante = st.segmented_control("Hacia adelante (próximas)", HORIZONTES, key="adelante",
+                                    format_func=lambda h: f"{h} h")
+    st.caption("Sin horizonte elegido se usan las fechas del evento. "
+               "Toca de nuevo un botón para quitarlo.")
+    st.markdown("**Fechas del evento**")
+    d0 = st.date_input("Inicio del evento", datetime(2026, 9, 22), disabled=bool(atras))
+    h0 = st.time_input("Hora de inicio", datetime(2026, 9, 22, 12, 0).time(),
+                       disabled=bool(atras))
+    d1 = st.date_input("Fin del evento", datetime(2026, 9, 25), disabled=bool(adelante))
+    ya = pd.Timestamp(F.ahora_local()).floor("h")
+    inicio = (ya - pd.Timedelta(hours=atras) if atras
+              else pd.Timestamp(datetime.combine(d0, h0)))
+    fin = (ya + pd.Timedelta(hours=adelante) if adelante
+           else pd.Timestamp(datetime.combine(d1, datetime.min.time())))
+    if fin <= inicio:
+        st.error("El fin del período debe ser posterior al inicio.")
+        st.stop()
+    st.caption(f"Período: {DIAS[inicio.weekday()].lower()} {inicio:%d/%m %H:%M} → "
+               f"{DIAS[fin.weekday()].lower()} {fin:%d/%m %H:%M}")
     if st.button("Forzar actualización"):
         st.cache_data.clear()
     st.caption("Los datos se renuevan solos cada hora.")
@@ -157,8 +176,9 @@ r10, r50, r90 = np.percentile(resto, [10, 50, 90])
 col_tit, col_logo = st.columns([5, 1.3], vertical_alignment="center")
 col_tit.markdown("## Visor de Lluvia · Valdivia")
 col_tit.markdown("Observado y pronóstico en Valdivia y Corral")
-col_tit.caption(f"Actualizado {t_obs:%d/%m %H:%M} (hora de Chile) · evento desde el "
-                f"{DIAS[inicio.weekday()].lower()} {inicio:%d/%m %H:%M} · {CUENTA}")
+col_tit.caption(f"Actualizado {t_obs:%d/%m %H:%M} (hora de Chile) · período "
+                f"{DIAS[inicio.weekday()].lower()} {inicio:%d/%m %H:%M} → "
+                f"{DIAS[fin.weekday()].lower()} {fin:%d/%m %H:%M} · {CUENTA}")
 with col_logo:
     logo_lab()
 
@@ -221,7 +241,7 @@ except Exception:                                                # noqa: BLE001
 
 # ------------------------------------------------------------------ descargas
 quien = est[elegida]["nombre"] if elegida else "por grupo (media de estaciones)"
-sub_desc = (f"Valdivia y Corral · {quien} · evento desde el {inicio:%d/%m %H:%M} · "
+sub_desc = (f"Valdivia y Corral · {quien} · {inicio:%d/%m %H:%M} → {fin:%d/%m %H:%M} · "
             f"actualizado {t_obs:%d/%m %H:%M} (hora de Chile)")
 pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares. Pronóstico: "
             f"super-ensamble de {PP.shape[0]} miembros (GEFS, IFS-ENS, ICON-EPS, GEPS; "
