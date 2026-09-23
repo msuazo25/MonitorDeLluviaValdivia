@@ -37,7 +37,7 @@ En Streamlit Community Cloud, lo mismo va en *App settings → Secrets*.
 
 ## Publicar (Streamlit Community Cloud, gratis)
 
-1. Crear un repositorio en GitHub con esta carpeta (`app.py`, `fuentes.py`, `recursos/`,
+1. Crear un repositorio en GitHub con esta carpeta (`app.py`, `fuentes.py`, `graficos.py`, `recursos/`, `packages.txt`,
    `requirements.txt`, `README.md`).
 2. Entrar a share.streamlit.io con la cuenta de GitHub → *Create app* →
    elegir el repositorio y `app.py`.

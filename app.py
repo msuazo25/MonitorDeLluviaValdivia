@@ -16,6 +16,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 import fuentes as F
+import graficos as G
 
 st.set_page_config(page_title="Visor de Lluvia - Valdivia", page_icon="🌧️", layout="wide")
 
@@ -218,6 +219,29 @@ try:
 except Exception:                                                # noqa: BLE001
     pass
 
+# ------------------------------------------------------------------ descargas
+quien = est[elegida]["nombre"] if elegida else "por grupo (media de estaciones)"
+sub_desc = (f"Valdivia y Corral · {quien} · evento desde el {inicio:%d/%m %H:%M} · "
+            f"actualizado {t_obs:%d/%m %H:%M} (hora de Chile)")
+pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares. Pronóstico: "
+            f"super-ensamble de {PP.shape[0]} miembros (GEFS, IFS-ENS, ICON-EPS, GEPS; "
+            f"Open-Meteo), consultado el {t_pron:%d/%m %H:%M}.\n"
+            f"Visor de Lluvia · Valdivia — Manuel Suazo, Laboratorio de Dendrocronología "
+            f"y Cambio Global, UACh · {CUENTA}")
+
+
+def descargas(nombre, funcion, *args):
+    """Botones PNG (600 dpi) y PDF; el archivo se dibuja recién al apretar."""
+    base = f"visor_lluvia_valdivia_{nombre}_{t_obs:%Y%m%d_%H%M}"
+    c1, c2, _ = st.columns([1, 1, 3])
+    for col, fmt, mime in ((c1, "png", "image/png"), (c2, "pdf", "application/pdf")):
+        col.download_button(
+            f"{fmt.upper()}" + (" 600 dpi" if fmt == "png" else ""),
+            data=lambda fmt=fmt: funcion(fmt, *args), file_name=f"{base}.{fmt}",
+            mime=mime, icon=":material/download:", on_click="ignore",
+            key=f"dl_{nombre}_{fmt}", width="stretch")
+
+
 # ------------------------------------------------------------------ graficos
 with col_graf:
     if elegida:
@@ -234,6 +258,7 @@ with col_graf:
                 curvas.append((f"{g} ({len(miembros)} est.)", miembros, colg))
 
     # (a) por hora
+    obs_h, obs_a = [], []
     fa = go.Figure()
     fa.add_trace(go.Scatter(x=np.r_[ts, ts[::-1]], y=np.r_[p90, p10[::-1]],
                             fill="toself", fillcolor=BANDA, line=dict(width=0),
@@ -243,6 +268,7 @@ with col_graf:
     for nombre, miembros, colg in curvas:
         tab = pd.concat([F.horaria(o) for o in miembros], axis=1)
         tab = tab[(tab.index > inicio) & (tab.index <= ahora)]
+        obs_h.append((nombre, tab.index, tab.mean(axis=1).values, colg))
         fa.add_trace(go.Scatter(x=tab.index, y=tab.mean(axis=1), mode="lines",
                                 line=dict(color=colg, width=2.4),
                                 name=f"observado* {nombre}"))
@@ -252,6 +278,8 @@ with col_graf:
                      legend=dict(orientation="h", y=-.2), hovermode="x unified")
     fa.update_xaxes(**EJE_T)
     st.plotly_chart(fa, config=barra("resetScale2d"))
+    descargas("por_hora", G.por_hora, ts, p10, p90, med, obs_h, ahora,
+              sub_desc, pie_desc)
 
     # (b) acumulado
     fb = go.Figure()
@@ -263,6 +291,7 @@ with col_graf:
     for nombre, miembros, colg in curvas:
         for o in miembros:
             ev = o[(o.hora_local > inicio) & (o.hora_local <= fin)]
+            obs_a.append((nombre, [inicio, *ev.hora_local], [0, *ev.mm.cumsum()], colg))
             fb.add_trace(go.Scatter(x=[inicio, *ev.hora_local], y=[0, *ev.mm.cumsum()],
                                     line=dict(color=colg, width=1.6),
                                     name=f"observado* {nombre}", showlegend=False))
@@ -274,6 +303,9 @@ with col_graf:
                      showlegend=False, hovermode="x unified")
     fb.update_xaxes(**EJE_T)
     st.plotly_chart(fb, config=barra("resetScale2d"))
+    descargas("acumulado", G.acumulado, ts, a10, a50, a90, obs_a, ahora,
+              f"{sub_desc} · pronóstico total {a50[-1]:.0f} mm "
+              f"({a10[-1]:.0f}–{a90[-1]:.0f})", pie_desc)
 
 # ------------------------------------------------------------------ tarjetas 6 h
 st.markdown("**Lluvia esperada cada 6 horas** (mediana del pronóstico; rango p10–p90)")
