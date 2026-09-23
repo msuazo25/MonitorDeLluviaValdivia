@@ -24,11 +24,25 @@ AQUI = Path(__file__).resolve().parent
 AZUL, BANDA, ROJO = "#1F5A96", "rgba(157,191,221,.55)", "#B5323C"
 NIVELES = [(10, "débil", "#C9DCEE"), (25, "moderada", "#6FA3D2"),
            (np.inf, "fuerte", "#1F4E8C")]
+# eje de tiempo corto y sin inclinar (se lee bien en celular)
+EJE_T = dict(tickformat="%d/%m<br>%H:%M", nticks=6, tickangle=0)
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 ESRI = ("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
         "MapServer/tile/{z}/{y}/{x}")
 ESCALA_MAPA = [(25, "#FFF3B0"), (50, "#B8E186"), (75, "#41B6C4"),
                (100, "#2C7FB8"), (150, "#8856A7"), (np.inf, "#E7298A")]
+
+# ajustes para celular: métricas en 2x2 y botones de estación en varias filas
+st.markdown("""<style>
+[data-testid="stButtonGroup"], [data-testid="stButtonGroup"] > div { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .st-key-metricas [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .5rem 1rem; }
+  .st-key-metricas [data-testid="stColumn"] {
+    flex: 1 1 calc(50% - 1rem) !important; min-width: calc(50% - 1rem) !important; }
+  .st-key-metricas [data-testid="stMetricValue"] { font-size: 1.7rem; }
+  h2 { font-size: 1.7rem !important; }
+}
+</style>""", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------ datos
@@ -90,7 +104,7 @@ def logo_lab(ancho=230):
     fondo oscuro, sin esperar a que la app se vuelva a ejecutar."""
     st.markdown(f'<img src="data:image/png;base64,{_logo_b64()}" alt="Laboratorio de '
                 f'Dendrocronología y Cambio Global, UACh" style="width:{ancho}px;'
-                'max-width:100%;mix-blend-mode:difference">', unsafe_allow_html=True)
+                'max-width:100%;margin-bottom:.8rem;mix-blend-mode:difference">', unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------ barra lateral
@@ -141,7 +155,7 @@ with col_logo:
 
 sin_credencial = [e["nombre"] for e in F.ESTACIONES
                   if e["fuente"] == "dmc" and e["id"] not in series]
-c = st.columns(4)
+c = st.container(key="metricas").columns(4)
 for col, g in zip(c[:3], F.GRUPOS):
     v = [totales[e["id"]][0] for e in activas if e["grupo"] == g]
     txt = "—" if not v else (f"{min(v):.0f}–{max(v):.0f}" if len(v) > 1
@@ -168,7 +182,7 @@ with col_mapa:
         customdata=[e["id"] for e in activas],
         hovertemplate="%{text} mm<extra></extra>"))
     fmap.update_layout(
-        map=dict(style="white-bg", center=dict(lat=-39.80, lon=-73.30), zoom=8.7,
+        map=dict(style="white-bg", center=dict(lat=-39.80, lon=-73.32), zoom=8.3,
                  layers=[dict(sourcetype="raster", source=[ESRI], below="traces")]),
         margin=dict(l=0, r=0, t=0, b=0), height=440, showlegend=False,
         clickmode="event+select")
@@ -227,6 +241,7 @@ with col_graf:
     fa.update_layout(title="Precipitación por hora (mm)", height=300,
                      margin=dict(l=10, r=10, t=40, b=10), bargap=.15,
                      legend=dict(orientation="h", y=-.2), hovermode="x unified")
+    fa.update_xaxes(**EJE_T)
     st.plotly_chart(fa, config={"displayModeBar": False})
 
     # (b) acumulado
@@ -243,10 +258,12 @@ with col_graf:
                                     line=dict(color=colg, width=1.6),
                                     name=f"observado* {nombre}", showlegend=False))
     fb.add_vline(x=ahora, line_color=ROJO, line_width=1.5)
-    fb.update_layout(title=f"Acumulado desde el inicio (mm) · pronóstico total "
-                           f"{a50[-1]:.0f} mm ({a10[-1]:.0f}–{a90[-1]:.0f})",
-                     height=280, margin=dict(l=10, r=10, t=40, b=10),
+    fb.update_layout(title=dict(text="Acumulado desde el inicio (mm)",
+                                subtitle=dict(text=f"pronóstico total {a50[-1]:.0f} mm "
+                                                   f"({a10[-1]:.0f}–{a90[-1]:.0f})")),
+                     height=290, margin=dict(l=10, r=10, t=60, b=10),
                      showlegend=False, hovermode="x unified")
+    fb.update_xaxes(**EJE_T)
     st.plotly_chart(fb, config={"displayModeBar": False})
 
 # ------------------------------------------------------------------ tarjetas 6 h
