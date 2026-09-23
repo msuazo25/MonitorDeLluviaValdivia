@@ -13,6 +13,7 @@ import streamlit as st
 
 import fuentes as F
 import graficos as G
+import tarjeta as T
 
 CUENTA = "@el_lluviologo"
 AQUI = Path(__file__).resolve().parent
@@ -437,6 +438,27 @@ for b0, b1, (q10, q50, q90), rf in bloques:
         + "</div>")
 html.append("</div>")
 st.markdown("".join(html), unsafe_allow_html=True)
+
+# ------------------------------------------------------------------ compartir
+datos_tarjeta = dict(
+    t_obs=pd.Timestamp(t_obs), inicio=inicio, fin=fin, ahora=ahora,
+    grupos=[(g, colg,
+             min(v) if (v := [totales[e["id"]][0] for e in activas if e["grupo"] == g]) else None,
+             max(v) if v else None, len(v))
+            for g, colg in F.GRUPOS.items()],
+    resto=(r10, r50, r90), ts=ts, a10=a10, a50=a50, a90=a90,
+    obs=[([inicio, *ev.hora_local], [0, *ev.mm.cumsum()], F.GRUPOS[e["grupo"]])
+         for e in activas if e["grupo"]
+         for ev in [series[e["id"]][(series[e["id"]].hora_local > inicio) &
+                                    (series[e["id"]].hora_local <= fin)]]],
+    peso=TXT_PESO, cuenta=CUENTA)
+st.markdown("**Compartir** · tarjeta con las cifras de este momento (PNG, 600 dpi)")
+fila_t = st.container(horizontal=True, gap="small")
+for tipo, rotulo in (("feed", "Publicación 4:5"), ("historia", "Historia 9:16")):
+    fila_t.download_button(
+        rotulo, data=lambda tipo=tipo: T.tarjeta("png", tipo, datos_tarjeta),
+        file_name=f"visor_lluvia_valdivia_{tipo}_{t_obs:%Y%m%d_%H%M}.png", mime="image/png",
+        icon=":material/share:", on_click="ignore", key=f"tarjeta_{tipo}")
 
 # ------------------------------------------------------------------ pie
 faltan = [e["nombre"] for e in F.ESTACIONES if e not in activas]

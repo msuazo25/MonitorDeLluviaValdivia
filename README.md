@@ -55,6 +55,8 @@ La app se duerme tras unos días sin visitas; la primera visita la despierta.
 - `fuentes.py`: descarga de estaciones y del ensamble, pesos y percentiles
   ponderados del super-ensamble.
 - `graficos.py`: versiones descargables (PNG 600 dpi / PDF) de los gráficos.
+- `tarjeta.py`: tarjeta para redes (publicación 4:5 e historia 9:16, respetando
+  las zonas que tapa Instagram).
 
 ## Ajustes frecuentes
 
