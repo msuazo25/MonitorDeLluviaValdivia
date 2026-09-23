@@ -61,7 +61,8 @@ a 10 m, 3 días hacia atrás y 4 hacia adelante.
 st.dataframe(pd.DataFrame([
     {"Modelo": n, "Centro": c, "Miembros": k, "Resolución": r, "Se actualiza": a}
     for n, c, k, r, a in F.INFO_MODELO.values()]), hide_index=True, width="stretch")
-st.caption("Miembros, resolución y frecuencia según la documentación de Open-Meteo. "
+st.caption("Miembros y frecuencia según la documentación de Open-Meteo. Resolución: la "
+           "grilla con que la API entrega cada modelo en esta zona. "
            "Los modelos con salida cada 3 h se entregan interpolados a series horarias.")
 
 st.markdown("""
@@ -121,7 +122,7 @@ de ese plazo, la siguiente visita vuelve a descargarlos.
 st.markdown("### 4. Limitaciones")
 st.markdown("""
 - **Punto de grilla vs. estación.** El pronóstico representa un promedio sobre
-  una celda de ~25 km, no el punto exacto de cada estación. La lluvia real
+  una celda de 25 a 50 km según el modelo, no el punto exacto de cada estación. La lluvia real
   varía mucho entre costa, ciudad y cordillera; es normal que las estaciones
   de la costa superen el pronóstico o que el interior quede bajo él.
 - **Sin corrección de sesgo.** Los modelos se usan tal como vienen, sin

@@ -45,7 +45,7 @@ INFO_MODELO = {
     "gfs025": ("GEFS", "NOAA/NCEP (EE. UU.)", 31, "0,25° (~25 km), cada 3 h", "cada 6 h"),
     "ecmwf_ifs025": ("IFS-ENS", "ECMWF (Europa)", 51, "0,25° (~25 km), cada 3 h", "cada 6 h"),
     "icon_global": ("ICON-EPS", "DWD (Alemania)", 40, "~26 km, cada 1 h", "cada 12 h"),
-    "gem_global": ("GEPS", "ECCC (Canadá)", 21, "0,25° (~25 km), cada 3 h", "cada 12 h"),
+    "gem_global": ("GEPS", "ECCC (Canadá)", 21, "0,5° (~50 km), cada 3 h", "cada 12 h"),
 }
 
 
