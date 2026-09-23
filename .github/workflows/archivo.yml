@@ -1,0 +1,60 @@
+# Guarda cada hora lo observado en las estaciones y cada corrida nueva del
+# ensamble en la rama `datos` (tareas/archivar.py). Streamlit despliega solo
+# desde `main`, así que estos guardados no reinician la app.
+#
+# Secrets del repositorio (Settings → Secrets and variables → Actions):
+#   DMC_USUARIO, DMC_TOKEN   sin ellos se archivan solo las estaciones VIPNet
+name: Archivo de datos
+
+on:
+  schedule:
+    - cron: "7 * * * *"          # cada hora, al minuto 7 (UTC)
+  workflow_dispatch:              # botón "Run workflow" para correrla a mano
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archivo
+  cancel-in-progress: false
+
+jobs:
+  archivar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Código (main)
+        uses: actions/checkout@v4
+
+      - name: Archivo (rama datos)
+        uses: actions/checkout@v4
+        with:
+          ref: datos
+          path: archivo
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dependencias
+        run: pip install requests pandas numpy pyarrow
+
+      - name: Descargar y archivar
+        env:
+          DMC_USUARIO: ${{ secrets.DMC_USUARIO }}
+          DMC_TOKEN: ${{ secrets.DMC_TOKEN }}
+        run: python tareas/archivar.py archivo
+
+      - name: Guardar en la rama datos
+        working-directory: archivo
+        run: |
+          git config user.name "archivo-automatico"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Sin cambios"
+          else
+            git commit -q -m "Archivo $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git push -q origin HEAD:datos
+          fi

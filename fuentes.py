@@ -188,6 +188,38 @@ def cuantiles(X, w, qs):
     return out[:, 0] if vector else out
 
 
+# carpeta de cada modelo en los metadatos de Open-Meteo (hora de inicio de la corrida)
+META_MODELO = {"gfs025": "ncep_gefs025", "ecmwf_ifs025": "ecmwf_ifs025_ensemble",
+               "icon_global": "dwd_icon_eps", "gem_global": "cmc_gem_geps"}
+
+
+def corrida(m):
+    """Hora de inicio (UTC, sin zona) de la última corrida disponible del modelo."""
+    r = requests.get(f"https://ensemble-api.open-meteo.com/data/{META_MODELO[m]}/static/meta.json",
+                     headers=UA, timeout=30)
+    r.raise_for_status()
+    return pd.Timestamp(r.json()["last_run_initialisation_time"], unit="s")
+
+
+def ensamble_modelo(m, pasado=3, dias=4):
+    """Un modelo del ensamble: t (hora de Chile), precipitación y ráfaga
+    (miembros x horas). Devuelve None si Open-Meteo no responde."""
+    r = requests.get("https://ensemble-api.open-meteo.com/v1/ensemble", params=dict(
+        latitude=LAT, longitude=LON, models=m,
+        hourly="precipitation,wind_gusts_10m", past_days=pasado,
+        forecast_days=dias, timezone="UTC"), headers=UA, timeout=90)
+    if not r.ok:
+        return None
+    h = r.json()["hourly"]
+    t = pd.to_datetime(h["time"]) + pd.Timedelta(hours=TZ_CHILE)
+
+    def mat(var):
+        k = sorted(c for c in h if c == var or c.startswith(var + "_member"))
+        M = np.array([[np.nan if v is None else v for v in h[c]] for c in k], float)
+        return M[np.isfinite(M).any(axis=1)] if M.size else M
+    return t, mat("precipitation"), mat("wind_gusts_10m")
+
+
 def ensamble(pasado=3, dias=4):
     """Super-ensamble horario (precipitacion y rafaga) de 4 centros.
 
@@ -195,24 +227,13 @@ def ensamble(pasado=3, dias=4):
     fila (miembro) de pp y de raf."""
     pp, raf, mod_pp, mod_raf, t = [], [], [], [], None
     for m in MODELOS:
-        r = requests.get("https://ensemble-api.open-meteo.com/v1/ensemble", params=dict(
-            latitude=LAT, longitude=LON, models=m,
-            hourly="precipitation,wind_gusts_10m", past_days=pasado,
-            forecast_days=dias, timezone="UTC"), headers=UA, timeout=90)
-        if not r.ok:
+        res = ensamble_modelo(m, pasado, dias)
+        if res is None:
             continue
-        h = r.json()["hourly"]
-        t = pd.to_datetime(h["time"]) + pd.Timedelta(hours=TZ_CHILE)
-
-        def mat(var):
-            k = sorted(c for c in h if c == var or c.startswith(var + "_member"))
-            M = np.array([[np.nan if v is None else v for v in h[c]] for c in k], float)
-            return M[np.isfinite(M).any(axis=1)] if M.size else M
-        p = mat("precipitation")
+        t, p, g = res
         if p.size:
             pp.append(p)
             mod_pp += [m] * len(p)
-        g = mat("wind_gusts_10m")
         if g.size:
             raf.append(g)
             mod_raf += [m] * len(g)

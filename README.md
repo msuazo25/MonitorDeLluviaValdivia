@@ -58,6 +58,18 @@ La app se duerme tras unos días sin visitas; la primera visita la despierta.
 - `tarjeta.py`: tarjeta para redes (publicación 4:5 e historia 9:16, respetando
   las zonas que tapa Instagram).
 
+## Archivo de datos (verificación)
+
+Una tarea de GitHub Actions (`.github/workflows/archivo.yml`) corre cada hora
+`tareas/archivar.py` y guarda en la rama **`datos`** lo observado en cada
+estación y cada corrida nueva del ensamble (ver el README de esa rama).
+
+- Para incluir las estaciones de la DMC, agregar `DMC_USUARIO` y `DMC_TOKEN` en
+  *Settings → Secrets and variables → Actions* del repositorio.
+- Se puede correr a mano en *Actions → Archivo de datos → Run workflow*.
+- GitHub pausa las tareas programadas tras 60 días sin actividad en el
+  repositorio; avisa por correo y se reactiva con un clic.
+
 ## Ajustes frecuentes
 
 - Estaciones, grupos y colores: `ESTACIONES` y `GRUPOS` en `fuentes.py`.
