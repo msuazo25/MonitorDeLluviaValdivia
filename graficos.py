@@ -55,7 +55,7 @@ def _ahora(ax, ahora):
 
 
 def _leyenda(ax, marcas):
-    ax.legend(handles=marcas, ncol=len(marcas), frameon=False, fontsize=6.3,
+    ax.legend(handles=marcas, ncol=min(len(marcas), 4), frameon=False, fontsize=6.3,
               loc="upper center", bbox_to_anchor=(.5, -.2), handlelength=1.6,
               columnspacing=1.2)
 
@@ -66,30 +66,48 @@ def _guarda(fig, formato):
     return b.getvalue()
 
 
-def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie):
-    """obs: lista de (etiqueta, x, y, color) con la media horaria observada."""
+def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=None):
+    """obs: lista de (etiqueta, x, y, color) con la media horaria observada.
+    modelos: lista de (nombre, x, p10, mediana, p90, color); si viene, se dibuja
+    la mediana de cada modelo (punteada) sobre la banda gris del super-ensamble."""
     fig, ax = _base("Precipitación por hora (mm)", subtitulo, pie)
     ts = np.asarray(ts, dtype="datetime64[ns]")
-    ax.fill_between(ts, p10, p90, color=BANDA, alpha=.6, lw=0)
-    ancho = np.median(np.diff(ts)).astype("timedelta64[s]").astype(float) / 86400 * .8
-    ax.bar(ts, med, width=ancho, color=AZUL, alpha=.85)
+    if modelos:
+        ax.fill_between(ts, p10, p90, color="#BDBDBD", alpha=.5, lw=0)
+        for _, x, _, q50, _, col in modelos:
+            ax.plot(x, q50, color=col, lw=1.3, ls=(0, (4, 2)))
+    else:
+        ax.fill_between(ts, p10, p90, color=BANDA, alpha=.6, lw=0)
+        ancho = np.median(np.diff(ts)).astype("timedelta64[s]").astype(float) / 86400 * .8
+        ax.bar(ts, med, width=ancho, color=AZUL, alpha=.85)
     for _, x, y, col in obs:
         ax.plot(x, y, color=col, lw=1.4)
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
     ax.set_ylim(0, None)
-    marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
-              Patch(color=AZUL, alpha=.85, label="pronóstico mediana")]
+    if modelos:
+        marcas = [Patch(color="#BDBDBD", alpha=.5, label="super-ensamble p10–p90")]
+        marcas += [Line2D([], [], color=c, lw=1.3, ls=(0, (4, 2)), label=n)
+                   for n, _, _, _, _, c in modelos]
+    else:
+        marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
+                  Patch(color=AZUL, alpha=.85, label="pronóstico mediana")]
     marcas += [Line2D([], [], color=c, lw=1.4, label=f"observado* {n}") for n, _, _, c in obs]
     _leyenda(ax, marcas)
     return _guarda(fig, formato)
 
 
-def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie):
-    """obs: lista de (etiqueta_grupo, x, y, color), una por estación."""
+def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie, modelos=None):
+    """obs: lista de (etiqueta_grupo, x, y, color), una por estación.
+    modelos: lista de (nombre, x, p10, mediana, p90, color) por modelo."""
     fig, ax = _base("Acumulado desde el inicio (mm)", subtitulo, pie)
-    ax.fill_between(ts, a10, a90, color=BANDA, alpha=.6, lw=0)
-    ax.plot(ts, a50, color=AZUL, lw=2)
+    if modelos:
+        for _, x, q10, q50, q90, col in modelos:
+            ax.fill_between(x, q10, q90, color=col, alpha=.12, lw=0)
+            ax.plot(x, q50, color=col, lw=1.6, ls=(0, (4, 2)))
+    else:
+        ax.fill_between(ts, a10, a90, color=BANDA, alpha=.6, lw=0)
+        ax.plot(ts, a50, color=AZUL, lw=2)
     vistos = {}
     for n, x, y, col in obs:
         ax.plot(x, y, color=col, lw=1.1)
@@ -97,8 +115,12 @@ def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie):
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
     ax.set_ylim(0, None)
-    marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
-              Line2D([], [], color=AZUL, lw=2, label="pronóstico mediana")]
+    if modelos:
+        marcas = [Line2D([], [], color=c, lw=1.6, ls=(0, (4, 2)), label=f"{n} (p10–p90)")
+                  for n, _, _, _, _, c in modelos]
+    else:
+        marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
+                  Line2D([], [], color=AZUL, lw=2, label="pronóstico mediana")]
     marcas += [Line2D([], [], color=c, lw=1.1, label=f"observado* {n}")
                for n, c in vistos.items()]
     _leyenda(ax, marcas)

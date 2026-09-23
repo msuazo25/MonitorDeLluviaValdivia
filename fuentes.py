@@ -37,6 +37,16 @@ GRUPOS = {"costa": "#00797C", "ciudad": "#E0701A", "interior": "#6B3FA0"}
 LAT, LON = -39.8142, -73.2459
 MODELOS = {"gfs025": "GEFS", "ecmwf_ifs025": "IFS-ENS",
            "icon_global": "ICON-EPS", "gem_global": "GEPS"}
+# línea punteada en los gráficos "por modelo"
+COLOR_MODELO = {"gfs025": "#E377C2", "ecmwf_ifs025": "#34495E",
+                "icon_global": "#7A8B1F", "gem_global": "#C9A227"}
+# para la página de metodología (documentación de Open-Meteo Ensemble API)
+INFO_MODELO = {
+    "gfs025": ("GEFS", "NOAA/NCEP (EE. UU.)", 31, "0,25° (~25 km), cada 3 h", "cada 6 h"),
+    "ecmwf_ifs025": ("IFS-ENS", "ECMWF (Europa)", 51, "0,25° (~25 km), cada 3 h", "cada 6 h"),
+    "icon_global": ("ICON-EPS", "DWD (Alemania)", 40, "~26 km, cada 1 h", "cada 12 h"),
+    "gem_global": ("GEPS", "ECCC (Canadá)", 21, "0,25° (~25 km), cada 3 h", "cada 12 h"),
+}
 
 
 def ahora_local():
@@ -143,9 +153,47 @@ def horaria(o):
 
 
 # ------------------------------------------------------------------ Open-Meteo
+def pesos(modelos, modo):
+    """Peso de cada miembro. "igual": cada modelo suma 1/K (K modelos) y se
+    reparte entre sus miembros; "miembro": todos los miembros pesan 1/N."""
+    modelos = np.asarray(modelos)
+    if modo == "miembro":
+        w = np.ones(len(modelos))
+    else:
+        cuenta = {m: (modelos == m).sum() for m in np.unique(modelos)}
+        w = np.array([1.0 / cuenta[m] for m in modelos])
+    return w / w.sum()
+
+
+def cuantiles(X, w, qs):
+    """Percentiles ponderados de X (miembros x tiempo, o vector de miembros).
+
+    Ordena los miembros, ubica cada uno en el punto medio de su peso
+    acumulado e interpola; con pesos iguales coincide con np.percentile
+    (método "hazen"). Los NaN no cuentan."""
+    X = np.asarray(X, float)
+    vector = X.ndim == 1
+    X = X[:, None] if vector else X
+    qs = np.atleast_1d(qs) / 100.0
+    out = np.full((len(qs), X.shape[1]), np.nan)
+    for j in range(X.shape[1]):
+        ok = np.isfinite(X[:, j])
+        if not ok.any():
+            continue
+        x, ww = X[ok, j], np.asarray(w)[ok]
+        o = np.argsort(x)
+        x, ww = x[o], ww[o] / ww[o].sum()
+        pos = np.cumsum(ww) - ww / 2
+        out[:, j] = np.interp(qs, pos, x)
+    return out[:, 0] if vector else out
+
+
 def ensamble(pasado=3, dias=4):
-    """Super-ensamble horario (precipitacion y rafaga) de 4 centros."""
-    pp, raf, t = [], [], None
+    """Super-ensamble horario (precipitacion y rafaga) de 4 centros.
+
+    Devuelve t, pp, raf, mod_pp, mod_raf: mod_* dice de qué modelo es cada
+    fila (miembro) de pp y de raf."""
+    pp, raf, mod_pp, mod_raf, t = [], [], [], [], None
     for m in MODELOS:
         r = requests.get("https://ensemble-api.open-meteo.com/v1/ensemble", params=dict(
             latitude=LAT, longitude=LON, models=m,
@@ -163,9 +211,12 @@ def ensamble(pasado=3, dias=4):
         p = mat("precipitation")
         if p.size:
             pp.append(p)
+            mod_pp += [m] * len(p)
         g = mat("wind_gusts_10m")
         if g.size:
             raf.append(g)
+            mod_raf += [m] * len(g)
     if not pp:
         raise RuntimeError("Open-Meteo no respondió")
-    return t, np.vstack(pp), (np.vstack(raf) if raf else None)
+    return (t, np.vstack(pp), (np.vstack(raf) if raf else None),
+            np.array(mod_pp), np.array(mod_raf))
