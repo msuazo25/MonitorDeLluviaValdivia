@@ -65,24 +65,23 @@ st.caption("Miembros, resolución y frecuencia según la documentación de Open-
            "Los modelos con salida cada 3 h se entregan interpolados a series horarias.")
 
 st.markdown("""
-#### Super-ensamble y pesos
+#### Super-ensamble: igual peso por modelo
 
 El **super-ensamble** junta los miembros de los cuatro modelos en una sola
-distribución. Hay dos formas de hacerlo, y el visor permite elegir:
+distribución, dando **el mismo peso a cada modelo** (25 %), sin importar
+cuántos miembros tenga: cada miembro de un modelo con *n* miembros pesa
+1 / (4 · *n*).
 
-- **Igual peso por modelo** (opción por defecto). Cada modelo pesa lo mismo
-  (25 %), sin importar cuántos miembros tenga: cada miembro de un modelo con
-  *n* miembros pesa 1 / (4 · *n*). Es la forma más usada al combinar
-  sistemas de distintos centros, porque la mejora de un conjunto multimodelo
-  viene sobre todo de sumar modelos distintos, y evita que el modelo con más
-  miembros domine.
-- **Igual peso por miembro.** Todos los miembros pesan lo mismo (1 / *N*).
-  Así, el modelo con más miembros pesa más: IFS-ENS aporta 51 de 143
-  miembros (≈ 36 %) y GEPS 21 (≈ 15 %).
+Si en cambio todos los miembros pesaran lo mismo, el modelo con más miembros
+dominaría el resultado: IFS-ENS aporta 51 de 143 miembros (≈ 36 %) y GEPS
+solo 21 (≈ 15 %), y eso no significa que uno sea más confiable que el otro.
+Dar igual peso a cada modelo es la forma más usada al combinar sistemas de
+distintos centros, porque la mejora de un conjunto multimodelo viene sobre
+todo de sumar modelos distintos.
 
 En la vista **Por modelo** se muestra la mediana de cada modelo por separado
 (línea punteada) y, en el acumulado, su rango p10–p90. Las cifras de arriba y
-las tarjetas usan en ese caso el super-ensamble con igual peso por modelo.
+las tarjetas siguen usando el super-ensamble.
 
 #### Mediana y rango p10–p90
 

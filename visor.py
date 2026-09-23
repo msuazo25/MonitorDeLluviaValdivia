@@ -23,7 +23,7 @@ NIVELES = [(10, "débil", "#C9DCEE"), (25, "moderada", "#6FA3D2"),
 # eje de tiempo corto y sin inclinar (se lee bien en celular)
 EJE_T = dict(tickformat="%d/%m<br>%H:%M", nticks=6, tickangle=0)
 # modos del pronóstico (ver metodologia.py)
-MODOS = {"igual": "Igual peso", "miembro": "Por miembro", "modelo": "Por modelo"}
+MODOS = {"super": "Super-ensamble", "modelo": "Por modelo"}
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 ESRI = ("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
         "MapServer/tile/{z}/{y}/{x}")
@@ -157,10 +157,12 @@ series, avisos, t_obs = carga_estaciones(hora_clave, secreto("DMC_USUARIO"),
                                          secreto("DMC_TOKEN"))
 t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave)
 # el selector se dibuja más abajo, pero su valor hace falta ya para las cifras
-modo = st.session_state.get("modo") or "igual"
-peso = "miembro" if modo == "miembro" else "igual"     # "por modelo": resúmenes con igual peso
-W = F.pesos(MP, peso)
-WR = F.pesos(MR, peso) if RAF is not None else None
+if st.session_state.get("modo") not in MODOS:          # sin elegir (o valor antiguo)
+    st.session_state["modo"] = "super"
+modo = st.session_state["modo"]
+# super-ensamble: cada modelo pesa lo mismo (ver metodologia.py)
+W = F.pesos(MP, "igual")
+WR = F.pesos(MR, "igual") if RAF is not None else None
 ahora = pd.Timestamp(t_obs).floor("h")
 est = {e["id"]: e for e in F.ESTACIONES}
 activas = [e for e in F.ESTACIONES if e["id"] in series and not series[e["id"]].empty]
@@ -264,7 +266,7 @@ except Exception:                                                # noqa: BLE001
 quien = est[elegida]["nombre"] if elegida else "por grupo (media de estaciones)"
 sub_desc = (f"Valdivia y Corral · {quien} · {inicio:%d/%m %H:%M} → {fin:%d/%m %H:%M} · "
             f"actualizado {t_obs:%d/%m %H:%M} (hora de Chile)")
-TXT_PESO = "igual peso por modelo" if peso == "igual" else "igual peso por miembro"
+TXT_PESO = "igual peso por modelo"
 pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares.\nPronóstico: "
             f"{PP.shape[0]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (Open-Meteo), "
             f"super-ensamble con {TXT_PESO}; consultado el {t_pron:%d/%m %H:%M}.\n"
@@ -288,9 +290,9 @@ def descargas(nombre, funcion, *args):
 with col_graf:
     fila_modo = st.container(horizontal=True, vertical_alignment="bottom", gap="medium")
     fila_modo.segmented_control(
-        "Pronóstico", list(MODOS), key="modo", default="igual", format_func=MODOS.get,
-        help="Igual peso / por miembro: dos formas de combinar los 4 modelos en un "
-             "super-ensamble. Por modelo: cada modelo por separado.")
+        "Pronóstico", list(MODOS), key="modo", format_func=MODOS.get,
+        help="Super-ensamble: los 4 modelos combinados, cada uno con el mismo peso. "
+             "Por modelo: cada modelo por separado.")
     fila_modo.page_link("metodologia.py", label="¿Cómo se calcula?",
                         icon=":material/help:")
     if elegida:
@@ -369,8 +371,8 @@ with col_graf:
     fb.add_vline(x=ahora, line_color=ROJO, line_width=1.5)
     fb.update_layout(title=dict(text="Acumulado desde el inicio (mm)",
                                 subtitle=dict(text=f"pronóstico total {a50[-1]:.0f} mm "
-                                                   f"({a10[-1]:.0f}–{a90[-1]:.0f}) · "
-                                                   f"{MODOS[peso].lower()}")),
+                                                   f"({a10[-1]:.0f}–{a90[-1]:.0f}), "
+                                                   "super-ensamble")),
                      height=340 if modo == "modelo" else 290,
                      margin=dict(l=10, r=10, t=60, b=10),
                      showlegend=modo == "modelo", hovermode="x unified",
@@ -389,8 +391,7 @@ with col_graf:
             "Modelo": d["nombre"], "Miembros": d["n"],
             "Mediana (mm)": round(float(d["acum"][1][-1])),
             "p10–p90 (mm)": f"{d['acum'][0][-1]:.0f}–{d['acum'][2][-1]:.0f}",
-            "Peso igual / por miembro": f"{100 / len(por_modelo):.0f}% / "
-                                        f"{100 * d['n'] / PP.shape[0]:.0f}%",
+            "Peso en el super-ensamble": f"{100 / len(por_modelo):.0f}%",
         } for d in por_modelo]), hide_index=True, width="stretch")
 
 # ------------------------------------------------------------------ tarjetas 6 h
