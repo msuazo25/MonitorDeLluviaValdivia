@@ -21,10 +21,8 @@ Scripts de Python no está en el PATH.)
 | VIPNet (DGA/MOP) | Corral, Curiñanco, Chaihuín, Llancahue | público, sin clave |
 | DMC | Isla Teja, Pichoy, Corral ESSAL | usuario + token (registro gratuito en climatologia.meteochile.gob.cl) |
 | Open-Meteo Ensemble | pronóstico (GEFS, IFS-ENS, ICON-EPS, GEPS) | público, uso no comercial |
-| VisMet (CR2) | — | exige clave de API: pedirla a CR2 |
 
-La lectura de la DMC (`fuentes.dmc`) está validada contra VisMet (Pichoy,
-53,6 vs 53,4 mm en 23 h). Si algo falla, revisar el expander «Avisos de descarga».
+Si falta alguna estación, revisar el expander «Avisos de descarga».
 
 ## Credenciales
 
