@@ -2,6 +2,9 @@
 Página de metodología: de dónde salen los datos y cómo se calcula cada cifra
 del visor. Mantener sincronizada con fuentes.py y visor.py.
 """
+import base64
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -162,9 +165,14 @@ st.markdown("""
 
 # ------------------------------------------------------------------ créditos
 st.markdown("### 5. Fuentes y créditos")
+# logo de la red INIA (lo piden al usar sus datos); fondo blanco para el tema oscuro
+LOGO_INIA = base64.b64encode((Path(__file__).resolve().parent / "recursos" /
+                              "logo_agromet_inia.png").read_bytes()).decode()
 st.markdown("""
 - Observaciones: Red Agrometeorológica INIA (agrometeorologia.cl), en
-  colaboración con las instituciones en convenio con INIA (Austral: UACh);
+  colaboración con las instituciones en convenio con INIA (Austral: UACh)
+  <img src="data:image/png;base64,""" + LOGO_INIA + """" alt="Red Agrometeorológica de INIA"
+  style="height:22px;vertical-align:middle;margin-left:.3rem;background:white;padding:2px 4px;border-radius:3px">;
   red VIPNet de la Dirección General de Aguas (MOP) y red de
   estaciones automáticas de la Dirección Meteorológica de Chile.
 - Pronóstico: Open-Meteo Ensemble API, con datos de NOAA/NCEP (GEFS), ECMWF
@@ -175,4 +183,4 @@ Implementado por **Manuel Suazo** · Laboratorio de Dendrocronología y Cambio
 Global, Universidad Austral de Chile ·
 [manu.suazo@gmail.com](mailto:manu.suazo@gmail.com) ·
 [@el_lluviologo](https://www.instagram.com/el_lluviologo/)
-""")
+""", unsafe_allow_html=True)
