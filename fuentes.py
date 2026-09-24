@@ -1,6 +1,6 @@
 """
-Descarga de datos para la app: estaciones (VIPNet/DGA y, con credenciales,
-DMC) y super-ensamble de Open-Meteo.
+Descarga de datos para la app: estaciones (VIPNet/DGA, red agrometeorológica
+INIA y, con credenciales, DMC) y super-ensamble de Open-Meteo.
 
 Todas las funciones devuelven horas en hora de Chile (UTC-3, sin zona) y el
 acumulado del intervalo que TERMINA en la marca de tiempo.
@@ -15,7 +15,7 @@ import requests
 TZ_CHILE = -3
 UA = {"User-Agent": "seguimiento-lluvia-valdivia (divulgacion; contacto en la app)"}
 
-# grupo None = solo aparece en el mapa
+# grupo None = solo aparece en el mapa; etiqueta = posición del nombre en el mapa
 ESTACIONES = [
     dict(id="corral", nombre="Corral", grupo="costa", fuente="vipnet",
          codigo="10200001-3", lat=-39.8908, lon=-73.4258),
@@ -26,11 +26,18 @@ ESTACIONES = [
     dict(id="llancahue", nombre="Llancahue", grupo="ciudad", fuente="vipnet",
          codigo="10123004-K", lat=-39.8561, lon=-73.1786),
     dict(id="islateja", nombre="Isla Teja (DMC)", grupo="ciudad", fuente="dmc",
-         codigo="390015", lat=-39.8072, lon=-73.2517),
+         codigo="390015", lat=-39.8072, lon=-73.2517, etiqueta="middle left"),
     dict(id="pichoy", nombre="Pichoy (DMC)", grupo="interior", fuente="dmc",
          codigo="390006", lat=-39.6506, lon=-73.0808),
     dict(id="corral_essal", nombre="Corral ESSAL (DMC)", grupo="costa", fuente="dmc",
-         codigo="390043", lat=-39.8881, lon=-73.4406),
+         codigo="390043", lat=-39.8881, lon=-73.4406, etiqueta="middle left"),
+    # red agrometeorológica INIA: codigo = valor del formulario de consulta,
+    # nombre_inia = encabezado de su columna en el CSV
+    dict(id="austral", nombre="Austral (INIA)", grupo="ciudad", fuente="inia",
+         codigo="INIA-151", nombre_inia="Austral", lat=-39.7874, lon=-73.2345),
+    dict(id="las_lomas", nombre="Las Lomas (INIA)", grupo="interior", fuente="inia",
+         codigo="INIA-99", nombre_inia="Las Lomas", lat=-39.7009, lon=-73.0148,
+         etiqueta="bottom center"),
 ]
 GRUPOS = {"costa": "#00797C", "ciudad": "#E0701A", "interior": "#6B3FA0"}
 
@@ -140,6 +147,51 @@ def dmc(codigo, usuario, token, dias=3):
     out = pd.DataFrame({"hora_local": g.index, "mm": g.values})
     out.attrs["avisos"] = errores          # fallas parciales (p. ej. falto el mes)
     return out
+
+
+# ------------------------------------------------------------------ INIA
+URL_INIA = "https://agrometeorologia.cl/"
+
+
+def inia(codigo, nombre_inia, dias=3):
+    """Lluvia horaria de una estación de la red agrometeorológica INIA
+    (agrometeorologia.cl, pública). El formulario "Consultar datos" genera un
+    CSV temporal y devuelve la página con el enlace.
+
+    El CSV marca cada hora por su INICIO y en UTC-4 fijo ("Tiempo UTC-4"):
+    la hora que termina, en UTC, es la marca + 5 h (comprobado contra Isla
+    Teja DMC, a 2 km: r = 0,97). Se descartan las horas incompletas (% de
+    datos < 100), como la hora en curso."""
+    import csv
+    import io
+    import re
+    hoy = ahora_local()
+    r = requests.post(URL_INIA, headers=UA, timeout=90, data={
+        "estaciones[]": [codigo], "variables[]": ["PP_SUM"], "intervalo": "hour",
+        "desde": f"{hoy - timedelta(days=dias):%d-%m-%Y}", "hasta": f"{hoy:%d-%m-%Y}",
+        "vista[]": ["csv"]})
+    r.raise_for_status()
+    m = re.search(r'https://agrometeorologia\.cl/tmp/[\w.-]+\.csv', r.text)
+    if not m:
+        raise ValueError("INIA no devolvió el enlace al CSV")
+    c = requests.get(m.group(0), headers=UA, timeout=60)
+    c.raise_for_status()
+    filas = list(csv.reader(io.StringIO(c.content.decode("utf-8-sig"))))
+    k = next(i for i, f in enumerate(filas) if f and f[0].startswith("Tiempo"))
+    # con una estación, su nombre va en la cabecera ("Austral, Valdivia"); el
+    # CSV se nombra por segundo, así que dos consultas simultáneas podrían chocar
+    if not any(f and f[0].startswith(nombre_inia + ",") for f in filas[:k]):
+        raise ValueError("INIA entregó el CSV de otra consulta")
+    t, mm = [], []
+    for f in filas[k + 1:]:
+        if len(f) < 3 or not re.match(r"\d\d-\d\d-\d{4}", f[0]) or not f[1] or f[2] != "100":
+            continue
+        t.append(pd.to_datetime(f[0], format="%d-%m-%Y %H:%M"))
+        mm.append(float(f[1]))
+    fin_utc = pd.DatetimeIndex(t) + pd.Timedelta(hours=5)
+    df = pd.DataFrame({"hora_local": fin_utc + pd.Timedelta(hours=TZ_CHILE), "mm": mm})
+    # la hora en curso a veces figura con 100 % de datos: fuera todo lo que no ha terminado
+    return df[df.hora_local <= hoy].reset_index(drop=True)
 
 
 # ------------------------------------------------------------------ util

@@ -21,6 +21,7 @@ Scripts de Python no está en el PATH.)
 |---|---|---|
 | VIPNet (DGA/MOP) | Corral, Curiñanco, Chaihuín, Llancahue | público, sin clave |
 | DMC | Isla Teja, Pichoy, Corral ESSAL | usuario + token (registro gratuito en climatologia.meteochile.gob.cl) |
+| Red Agrometeorológica INIA | Austral (UACh-INIA), Las Lomas | público (consulta de agrometeorologia.cl); INIA pide citar la fuente y mostrar el logo de la red |
 | Open-Meteo Ensemble | pronóstico (GEFS, IFS-ENS, ICON-EPS, GEPS) | público, uso no comercial |
 
 Si falta alguna estación, revisar el expander «Avisos de descarga».

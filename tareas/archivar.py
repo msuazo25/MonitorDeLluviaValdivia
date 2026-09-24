@@ -16,7 +16,7 @@ rama `datos`:
     python tareas/archivar.py <carpeta de la rama datos>
 
 Las credenciales de la DMC se leen de DMC_USUARIO y DMC_TOKEN (Secrets del
-repositorio); sin ellas se archivan solo las estaciones VIPNet.
+repositorio); sin ellas se archivan solo las estaciones VIPNet e INIA.
 """
 import json
 import os
@@ -38,6 +38,8 @@ def archiva_observado(base):
         try:
             if e["fuente"] == "vipnet":
                 o = F.vipnet(e["codigo"])
+            elif e["fuente"] == "inia":
+                o = F.inia(e["codigo"], e["nombre_inia"])
             elif usuario and token:
                 o = F.dmc(e["codigo"], usuario, token)
             else:

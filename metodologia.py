@@ -14,7 +14,7 @@ st.page_link("visor.py", label="Volver al visor", icon=":material/arrow_back:")
 # ------------------------------------------------------------------ observado
 st.markdown("### 1. Lluvia observada")
 st.markdown("""
-**Estaciones.** Siete estaciones automáticas de dos redes:
+**Estaciones.** Nueve estaciones automáticas de tres redes:
 
 - **VIPNet, Dirección General de Aguas (MOP):** Corral, Curiñanco, Chaihuín y
   Llancahue. Se leen del mismo servicio que usa el visor público de VIPNet:
@@ -25,6 +25,10 @@ st.markdown("""
   reinicia a las 12:01 UTC; la lluvia de cada intervalo se obtiene como la
   diferencia entre dos lecturas consecutivas de ese acumulado y luego se suma
   en intervalos de 15 minutos.
+- **Red Agrometeorológica INIA:** Austral (Valdivia, UACh-INIA) y Las Lomas
+  (Máfil). Se leen de la consulta pública de agrometeorologia.cl, con la lluvia
+  por hora. INIA marca cada hora por su inicio y en hora UTC−4 fija; el visor
+  la pasa a la hora que termina. Se descartan las horas con datos incompletos.
 
 **Horas.** Todo se muestra en hora de Chile (UTC−3). Cada valor horario es la
 lluvia de la hora que *termina* en esa marca (por ejemplo, 14:00 = de 13:00 a
@@ -72,9 +76,9 @@ st.markdown("""
 #### Pronóstico por zona
 
 Las estaciones no caen todas en la misma celda. En los modelos de 0,25° las
-siete estaciones quedan en tres celdas: una para Valdivia, Isla Teja,
+nueve estaciones quedan en tres celdas: una para Isla Teja, Austral,
 Llancahue y Curiñanco; otra para Corral, Corral ESSAL y Chaihuín, y otra para
-Pichoy. En GEPS (0,5°) quedan en cuatro celdas.
+Pichoy y Las Lomas. En GEPS (0,5°) quedan en cuatro celdas.
 
 Por eso el visor compara cada zona con su propio pronóstico:
 
@@ -159,7 +163,9 @@ st.markdown("""
 # ------------------------------------------------------------------ créditos
 st.markdown("### 5. Fuentes y créditos")
 st.markdown("""
-- Observaciones: red VIPNet de la Dirección General de Aguas (MOP) y red de
+- Observaciones: Red Agrometeorológica INIA (agrometeorologia.cl), en
+  colaboración con las instituciones en convenio con INIA (Austral: UACh);
+  red VIPNet de la Dirección General de Aguas (MOP) y red de
   estaciones automáticas de la Dirección Meteorológica de Chile.
 - Pronóstico: Open-Meteo Ensemble API, con datos de NOAA/NCEP (GEFS), ECMWF
   (IFS-ENS), DWD (ICON-EPS) y ECCC (GEPS).

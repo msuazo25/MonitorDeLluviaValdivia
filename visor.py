@@ -40,6 +40,11 @@ ZONAS = {"costa": ":material/waves:", "ciudad": ":material/location_city:",
 VIVO = {"costa": "#00B5B8", "ciudad": "#FF7A00", "interior": "#9446F0"}
 
 
+def corto(nombre):
+    """Nombre sin la red entre paréntesis, para el mapa y los botones."""
+    return nombre.split(" (")[0]
+
+
 def rgba(hexcolor, alfa):
     h = hexcolor.lstrip("#")
     return f"rgba({int(h[0:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alfa})"
@@ -73,6 +78,8 @@ def carga_estaciones(hora_clave, usuario_dmc, token_dmc):
         try:
             if e["fuente"] == "vipnet":
                 series[e["id"]] = F.vipnet(e["codigo"])
+            elif e["fuente"] == "inia":
+                series[e["id"]] = F.inia(e["codigo"], e["nombre_inia"])
             elif e["fuente"] == "dmc":
                 if not (usuario_dmc and token_dmc):
                     continue
@@ -89,10 +96,10 @@ def carga_estaciones(hora_clave, usuario_dmc, token_dmc):
 
 
 @st.cache_data(ttl=3600, show_spinner="Descargando pronóstico…")
-def carga_ensamble(hora_clave, formato="por_estacion"):
-    """formato forma parte de la clave de la caché: cambiarlo si cambia la forma
-    de lo que devuelve F.ensamble, o un servidor ya andando seguirá sirviendo
-    lo guardado con la forma antigua hasta que venza la hora."""
+def carga_ensamble(hora_clave, estaciones):
+    """estaciones (ids de F.ESTACIONES) forma parte de la clave de la caché: si
+    cambia la lista, un servidor ya andando no sirve lo guardado con la lista
+    antigua (PP tiene una fila por estación)."""
     t, pp, raf, mod_pp, mod_raf = F.ensamble()
     return t, pp, raf, mod_pp, mod_raf, F.ahora_local()
 
@@ -163,10 +170,11 @@ with st.sidebar:
 hora_clave = F.ahora_local().strftime("%Y%m%d%H")
 series, avisos, t_obs = carga_estaciones(hora_clave, secreto("DMC_USUARIO"),
                                          secreto("DMC_TOKEN"))
-t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave)
-if PP.ndim != 3:                          # caché de una versión anterior (un solo punto)
+IDS = tuple(e["id"] for e in F.ESTACIONES)
+t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave, IDS)
+if PP.ndim != 3 or PP.shape[0] != len(IDS):     # caché de una versión anterior
     carga_ensamble.clear()
-    t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave)
+    t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave, IDS)
 # el selector se dibuja más abajo, pero su valor hace falta ya para las cifras
 if st.session_state.get("modo") not in MODOS:          # sin elegir (o valor antiguo)
     st.session_state["modo"] = "super"
@@ -258,14 +266,27 @@ with col_mapa:
         marker=dict(size=27, color=colz), hoverinfo="skip"))
     fmap.add_trace(go.Scattermap(lat=lat, lon=lon, mode="markers",
                                  marker=dict(size=20, color="white"), hoverinfo="skip"))
-    fmap.add_trace(go.Scattermap(
-        lat=lat, lon=lon, mode="markers+text",
-        marker=dict(size=16, color=colores),
-        text=[f"{e['nombre'].replace(' (DMC)', '')} {v:.0f}" for e, v in zip(activas, mm)],
-        textposition="middle right",
-        textfont=dict(color="white", size=12),
-        customdata=[e["id"] for e in activas],
+    textos = [f"{corto(e['nombre'])} {v:.0f}" for e, v in zip(activas, mm)]
+    fmap.add_trace(go.Scattermap(                  # traza 2: la que se toca (ver abajo)
+        lat=lat, lon=lon, mode="markers", marker=dict(size=16, color=colores),
+        text=textos, customdata=[e["id"] for e in activas],
         hovertemplate="%{text} mm<extra></extra>"))
+    # nombres: a la derecha, salvo que F.ESTACIONES diga otra posición porque
+    # chocan con otra estación o se salen del mapa (Scattermap no acepta una
+    # posición por punto: una traza por posición)
+    # (el mapa oculta las etiquetas que se tapan entre sí)
+    for lado in sorted({e.get("etiqueta", "middle right") for e in activas}):
+        k = [i for i, e in enumerate(activas) if e.get("etiqueta", "middle right") == lado]
+        # y un pequeño corrimiento (grados) hacia el lado del texto
+        dlat, dlon = {"middle right": (0, .02), "middle left": (0, -.02),
+                      "bottom center": (-.02, 0)}.get(lado, (0, 0))
+        fmap.add_trace(go.Scattermap(
+            lat=[lat[i] + dlat for i in k], lon=[lon[i] + dlon for i in k], mode="markers+text",
+            # marcador invisible: solo "text" no se dibuja en Scattermap, y su tamaño
+            # separa el texto del círculo (Plotly lo aleja según el marcador)
+            marker=dict(size=42, opacity=0),
+            text=[textos[i] for i in k], textposition=lado,
+            textfont=dict(color="white", size=12), hoverinfo="skip"))
     fmap.update_layout(
         map=dict(style="white-bg", center=dict(lat=-39.80, lon=-73.32), zoom=8.3,
                  layers=[dict(sourcetype="raster", source=[ESRI], below="traces")]),
@@ -280,7 +301,7 @@ with col_mapa:
 
     # seleccion: botones (funcionan en celular) o clic en el mapa
     toda = f"Toda la zona {zona}"
-    opciones = {toda: None} | {e["nombre"].replace(" (DMC)", ""): e["id"]
+    opciones = {toda: None} | {corto(e["nombre"]): e["id"]
                                for e in activas if e["grupo"] == zona}
     boton = st.pills("Ver", list(opciones), default=toda, key=f"pick_{zona}",
                      label_visibility="collapsed")
@@ -333,7 +354,8 @@ quien = (est[elegida]["nombre"] if elegida
 sub_desc = (f"Valdivia y Corral · {quien} · {inicio:%d/%m %H:%M} → {fin:%d/%m %H:%M} · "
             f"actualizado {t_obs:%d/%m %H:%M} (hora de Chile)")
 TXT_PESO = "igual peso por modelo"
-pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares.\nPronóstico: "
+pie_desc = (f"* Observado: VIPNet (DGA/MOP), DMC y Red Agrometeorológica INIA, datos "
+            f"preliminares.\nPronóstico: "
             f"{PP.shape[1]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (Open-Meteo) en {donde}, "
             f"super-ensamble con {TXT_PESO}; consultado el {t_pron:%d/%m %H:%M}.\n"
             f"Visor de Lluvia · Valdivia — Manuel Suazo, Laboratorio de Dendrocronología "
@@ -534,7 +556,10 @@ st.caption(
     "Intensidad descriptiva, no equivale a alertas oficiales: seguir siempre a "
     "SENAPRED, DMC y la Municipalidad.  \n"
     "**\\* Observado:** red VIPNet (DGA/MOP)"
-    + (" y DMC" if any(e["fuente"] == "dmc" for e in activas) else "")
+    + (", DMC" if any(e["fuente"] == "dmc" for e in activas) else "")
+    + (" y Red Agrometeorológica INIA (agrometeorologia.cl, colaboración entre INIA y "
+       "las instituciones en convenio; Austral: UACh-INIA)"
+       if any(e["fuente"] == "inia" for e in activas) else "")
     + ". Datos preliminares, pendientes de control de calidad. Zonas: "
     + "; ".join(f"{g} ({', '.join(e['nombre'] for e in F.ESTACIONES if e['grupo'] == g)})"
                 for g in F.GRUPOS) + "."

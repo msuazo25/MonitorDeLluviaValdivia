@@ -114,7 +114,7 @@ def tarjeta(formato, tipo, d):
     ax_l.axis("off")
     fig.text(x1, y_logo + al_logo / 2, f"Visor de Lluvia · Valdivia\n{d['cuenta']}",
              fontsize=8.5 * esc, color=TINTA, ha="right", va="center", linespacing=1.5)
-    fig.text(x0, abajo, "* Datos preliminares de VIPNet (DGA) y DMC. Pronóstico: super-ensamble\n"
+    fig.text(x0, abajo, "* Datos preliminares de VIPNet (DGA), DMC y red INIA. Pronóstico: super-ensamble\n"
                         f"GEFS, IFS-ENS, ICON-EPS y GEPS (Open-Meteo), {d['peso']}.\n"
                         "No reemplaza las alertas oficiales de SENAPRED y la DMC.",
              fontsize=5.8 * esc, color=GRIS, va="bottom", linespacing=1.45)
