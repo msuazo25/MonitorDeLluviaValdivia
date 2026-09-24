@@ -278,8 +278,8 @@ with col_mapa:
     for lado in sorted({e.get("etiqueta", "middle right") for e in activas}):
         k = [i for i, e in enumerate(activas) if e.get("etiqueta", "middle right") == lado]
         # y un pequeño corrimiento (grados) hacia el lado del texto
-        dlat, dlon = {"middle right": (0, .02), "middle left": (0, -.02),
-                      "bottom center": (-.02, 0)}.get(lado, (0, 0))
+        dlat, dlon = {"middle right": (0, .007), "middle left": (0, -.007),
+                      "bottom center": (-.008, 0)}.get(lado, (0, 0))
         fmap.add_trace(go.Scattermap(
             lat=[lat[i] + dlat for i in k], lon=[lon[i] + dlon for i in k], mode="markers+text",
             # marcador invisible: solo "text" no se dibuja en Scattermap, y su tamaño
