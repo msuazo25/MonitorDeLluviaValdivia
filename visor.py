@@ -89,7 +89,10 @@ def carga_estaciones(hora_clave, usuario_dmc, token_dmc):
 
 
 @st.cache_data(ttl=3600, show_spinner="Descargando pronóstico…")
-def carga_ensamble(hora_clave):
+def carga_ensamble(hora_clave, formato="por_estacion"):
+    """formato forma parte de la clave de la caché: cambiarlo si cambia la forma
+    de lo que devuelve F.ensamble, o un servidor ya andando seguirá sirviendo
+    lo guardado con la forma antigua hasta que venza la hora."""
     t, pp, raf, mod_pp, mod_raf = F.ensamble()
     return t, pp, raf, mod_pp, mod_raf, F.ahora_local()
 
@@ -161,6 +164,9 @@ hora_clave = F.ahora_local().strftime("%Y%m%d%H")
 series, avisos, t_obs = carga_estaciones(hora_clave, secreto("DMC_USUARIO"),
                                          secreto("DMC_TOKEN"))
 t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave)
+if PP.ndim != 3:                          # caché de una versión anterior (un solo punto)
+    carga_ensamble.clear()
+    t, PP, RAF, MP, MR, t_pron = carga_ensamble(hora_clave)
 # el selector se dibuja más abajo, pero su valor hace falta ya para las cifras
 if st.session_state.get("modo") not in MODOS:          # sin elegir (o valor antiguo)
     st.session_state["modo"] = "super"
