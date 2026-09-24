@@ -344,6 +344,36 @@ for m, nombre_m in F.MODELOS.items():
         hora=F.cuantiles(P[fila], wm, [10, 50, 90]),
         acum=F.cuantiles(acum[fila], wm, [10, 50, 90])))
 
+# mismo eje y en las tres zonas, para compararlas al cambiar de una a otra:
+# el techo es el máximo de lo que se dibujaría en cualquiera de ellas (en este
+# modo de pronóstico). Una estación sola usa su propio techo.
+def techos(P_v, ids_obs):
+    """(máx. por hora, máx. acumulado) del pronóstico P_v (miembros x horas de
+    la ventana) y de lo observado en ids_obs."""
+    h = [F.cuantiles(P_v, W, [90])[0]]
+    fin_ac = np.nansum(np.where(ts > inicio, P_v, 0.0), axis=1)   # el acumulado
+    a = [F.cuantiles(fin_ac, W, [90])]                           # crece: basta el final
+    if modo == "modelo":
+        for m in F.MODELOS:
+            fila = MP == m
+            if fila.any():
+                wm = np.full(fila.sum(), 1.0 / fila.sum())
+                h.append(F.cuantiles(P_v[fila], wm, [50])[0])
+                a.append(F.cuantiles(fin_ac[fila], wm, [90]))
+    hs = [F.horaria(series[i]) for i in ids_obs if i in totales]
+    hs = [x[(x.index > inicio) & (x.index <= ahora)] for x in hs]
+    if hs:
+        h.append(pd.concat(hs, axis=1).mean(axis=1).values)   # por hora: la media
+        a += [totales[i][0] for i in ids_obs if i in totales]  # acumulado: cada una
+    return (max(np.nanmax(np.r_[x]) if np.size(x) else 0 for x in h),
+            max(np.nanmax(np.r_[x]) for x in a))
+
+
+todos = ([techos(PP[FILA[elegida]][:, sel_t], [elegida])] if elegida else
+         [techos(pronostico(ids)[0][:, sel_t], ids) for ids in ids_grupo.values()])
+TECHO_H = 1.08 * max(x[0] for x in todos)
+TECHO_A = 1.08 * max(x[1] for x in todos)
+
 # observado: más grueso y vivo sobre los modelos en pastel
 ANCHO_OBS = 3.6 if modo == "modelo" else 2.4
 COLOR_OBS = VIVO if modo == "modelo" else F.GRUPOS
@@ -427,11 +457,12 @@ with col_graf:
                      legend=dict(orientation="h", y=-.36 if modo == "modelo" else -.3,
                                  yanchor="top"), hovermode="x unified")
     fa.update_xaxes(**EJE_T)
+    fa.update_yaxes(range=[0, TECHO_H])
     st.plotly_chart(fa, config=barra("resetScale2d"))
     descargas("por_hora", G.por_hora, ts, p10, p90, med, obs_h, ahora,
               sub_desc, pie_desc,
               [(d["nombre"], ts, *d["hora"], d["color"]) for d in por_modelo]
-              if modo == "modelo" else None, ANCHO_OBS / 2)
+              if modo == "modelo" else None, ANCHO_OBS / 2, TECHO_H)
 
     # (b) acumulado
     fb = go.Figure()
@@ -466,12 +497,13 @@ with col_graf:
                      showlegend=modo == "modelo", hovermode="x unified",
                      legend=dict(orientation="h", y=-.3, yanchor="top"))
     fb.update_xaxes(**EJE_T)
+    fb.update_yaxes(range=[0, TECHO_A])
     st.plotly_chart(fb, config=barra("resetScale2d"))
     descargas("acumulado", G.acumulado, ts, a10, a50, a90, obs_a, ahora,
               f"{sub_desc} · pronóstico total {a50[-1]:.0f} mm "
               f"({a10[-1]:.0f}–{a90[-1]:.0f})", pie_desc,
               [(d["nombre"], ts, *d["acum"], d["color"]) for d in por_modelo]
-              if modo == "modelo" else None, ANCHO_OBS / 2)
+              if modo == "modelo" else None, ANCHO_OBS / 2, TECHO_A)
 
     if modo == "modelo":
         st.markdown(f"**Total pronosticado en el período, por modelo** · {elegida and est[elegida]['nombre'] or 'zona ' + zona}")

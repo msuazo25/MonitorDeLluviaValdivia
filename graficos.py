@@ -67,7 +67,7 @@ def _guarda(fig, formato):
 
 
 def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=None,
-             lw_obs=1.4):
+             lw_obs=1.4, techo=None):
     """obs: lista de (etiqueta, x, y, color) con la media horaria observada.
     modelos: lista de (nombre, x, p10, mediana, p90, color); si viene, se dibuja
     la mediana de cada modelo sobre la banda gris del super-ensamble."""
@@ -85,7 +85,7 @@ def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=Non
         ax.plot(x, y, color=col, lw=lw_obs)
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
-    ax.set_ylim(0, None)
+    ax.set_ylim(0, techo)            # techo: mismo eje y entre zonas
     if modelos:
         marcas = [Patch(color="#BDBDBD", alpha=.5, label="super-ensamble p10–p90")]
         marcas += [Line2D([], [], color=c, lw=1.4, label=n)
@@ -99,7 +99,7 @@ def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=Non
 
 
 def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie, modelos=None,
-              lw_obs=1.4):
+              lw_obs=1.4, techo=None):
     """obs: lista de (etiqueta_grupo, x, y, color), una por estación.
     modelos: lista de (nombre, x, p10, mediana, p90, color) por modelo."""
     fig, ax = _base("Acumulado desde el inicio (mm)", subtitulo, pie)
@@ -116,7 +116,7 @@ def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie, modelos=No
         vistos.setdefault(n, col)
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
-    ax.set_ylim(0, None)
+    ax.set_ylim(0, techo)            # techo: mismo eje y entre zonas
     if modelos:
         marcas = [Line2D([], [], color=c, lw=1.6, label=f"{n} (p10–p90)")
                   for n, _, _, _, _, c in modelos]
