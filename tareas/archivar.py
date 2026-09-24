@@ -6,7 +6,11 @@ rama `datos`:
     observado/AAAA-MM.csv            lluvia horaria por estación (hora UTC que termina)
     pronostico/<modelo>/AAAAMMDDHH.parquet
                                      cada corrida nueva de cada modelo: todos los
-                                     miembros, desde la hora de inicio en adelante
+                                     miembros, desde la hora de inicio en adelante,
+                                     en la celda de cada estación (columna
+                                     "estacion"; las corridas anteriores al
+                                     24-09-2026 no la tienen y son del punto de
+                                     Valdivia, F.LAT/F.LON)
     indice.json                      última corrida guardada de cada modelo
 
     python tareas/archivar.py <carpeta de la rama datos>
@@ -76,25 +80,28 @@ def archiva_pronostico(base):
             ini = F.corrida(m)
             if indice.get(m) == f"{ini:%Y%m%d%H}":
                 continue                                         # esa corrida ya está
-            res = F.ensamble_modelo(m, pasado=1, dias=5)
+            res = F.ensamble_modelo(m, pasado=1, dias=5,
+                                    puntos=[(e["lat"], e["lon"]) for e in F.ESTACIONES])
             if res is None:
                 raise RuntimeError("Open-Meteo no respondió")
             t, pp, raf = res
             t_utc = pd.DatetimeIndex(t) + A_UTC
             sel = t_utc >= ini
-            con_raf = raf.shape[0] == pp.shape[0]          # no todos los modelos traen ráfaga
+            con_raf = raf.shape[:2] == pp.shape[:2]        # no todos los modelos traen ráfaga
             filas = []
-            for k in range(pp.shape[0]):
-                filas.append(pd.DataFrame({
-                    "hora_utc": t_utc[sel], "miembro": k,
-                    "pp": pp[k, sel].astype("float32"),
-                    "raf": raf[k, sel].astype("float32") if con_raf else float("nan")}))
+            for i, e in enumerate(F.ESTACIONES):             # pp: estaciones x miembros x horas
+                for k in range(pp.shape[1]):
+                    filas.append(pd.DataFrame({
+                        "hora_utc": t_utc[sel], "estacion": e["id"], "miembro": k,
+                        "pp": pp[i, k, sel].astype("float32"),
+                        "raf": raf[i, k, sel].astype("float32") if con_raf else float("nan")}))
             df = pd.concat(filas, ignore_index=True)
             carpeta = base / "pronostico" / m
             carpeta.mkdir(parents=True, exist_ok=True)
             df.to_parquet(carpeta / f"{ini:%Y%m%d%H}.parquet", index=False, compression="zstd")
             indice[m] = f"{ini:%Y%m%d%H}"
-            hechos.append(f"{m} {ini:%Y-%m-%d %H} UTC ({pp.shape[0]} miembros)")
+            hechos.append(f"{m} {ini:%Y-%m-%d %H} UTC ({pp.shape[1]} miembros, "
+                          f"{pp.shape[0]} estaciones)")
         except Exception as ex:                                  # noqa: BLE001
             avisos.append(f"{m}: {str(ex)[:120]}")
     ruta_ind.write_text(json.dumps(indice, indent=1, sort_keys=True))

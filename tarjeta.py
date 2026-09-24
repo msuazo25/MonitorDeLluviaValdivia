@@ -32,7 +32,7 @@ def tarjeta(formato, tipo, d):
     """Devuelve los bytes de la tarjeta.
 
     d: t_obs, inicio, fin, ahora, grupos [(nombre, color, mínimo, máximo, n)],
-       resto (p10, p50, p90), ts, a10, a50, a90, obs [(x, y, color)], peso, cuenta.
+       lugar, resto (p10, p50, p90), ts, a10, a50, a90, obs [(x, y, color)], peso, cuenta.
     """
     W, H = FORMATOS[tipo]
     fig = Figure(figsize=(W, H), facecolor=PAPEL)
@@ -75,7 +75,7 @@ def tarjeta(formato, tipo, d):
     # pronóstico restante
     y -= 0.012
     r10, r50, r90 = d["resto"]
-    texto(y, f"Pronóstico desde las {d['ahora']:%H} h hasta el fin", fontsize=10 * esc,
+    texto(y, f"Pronóstico {d['lugar']}, desde las {d['ahora']:%H} h", fontsize=10 * esc,
           fontweight="bold")
     y -= 0.035 if historia else 0.04
     fig.text(x0, y, f"{r50:.0f} mm", fontsize=30 * esc, fontweight="bold", color=AZUL, va="top")
@@ -101,7 +101,7 @@ def tarjeta(formato, tipo, d):
     ax.xaxis.set_major_locator(mdates.HourLocator(byhour=[0]))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
     ax.tick_params(labelsize=7 * esc, length=2, width=.5, colors=GRIS)
-    ax.set_title("Acumulado (mm): estaciones y pronóstico (mediana, p10–p90)",
+    ax.set_title(f"Acumulado (mm), {d['lugar']}: estaciones y pronóstico",
                  fontsize=7.5 * esc, color=GRIS, loc="left", pad=4)
 
     # pie

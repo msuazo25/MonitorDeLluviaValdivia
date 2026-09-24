@@ -66,62 +66,64 @@ def _guarda(fig, formato):
     return b.getvalue()
 
 
-def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=None):
+def por_hora(formato, ts, p10, p90, med, obs, ahora, subtitulo, pie, modelos=None,
+             lw_obs=1.4):
     """obs: lista de (etiqueta, x, y, color) con la media horaria observada.
     modelos: lista de (nombre, x, p10, mediana, p90, color); si viene, se dibuja
-    la mediana de cada modelo (punteada) sobre la banda gris del super-ensamble."""
+    la mediana de cada modelo sobre la banda gris del super-ensamble."""
     fig, ax = _base("Precipitación por hora (mm)", subtitulo, pie)
     ts = np.asarray(ts, dtype="datetime64[ns]")
     if modelos:
         ax.fill_between(ts, p10, p90, color="#BDBDBD", alpha=.5, lw=0)
         for _, x, _, q50, _, col in modelos:
-            ax.plot(x, q50, color=col, lw=1.3, ls=(0, (4, 2)))
+            ax.plot(x, q50, color=col, lw=1.4)
     else:
         ax.fill_between(ts, p10, p90, color=BANDA, alpha=.6, lw=0)
         ancho = np.median(np.diff(ts)).astype("timedelta64[s]").astype(float) / 86400 * .8
         ax.bar(ts, med, width=ancho, color=AZUL, alpha=.85)
     for _, x, y, col in obs:
-        ax.plot(x, y, color=col, lw=1.4)
+        ax.plot(x, y, color=col, lw=lw_obs)
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
     ax.set_ylim(0, None)
     if modelos:
         marcas = [Patch(color="#BDBDBD", alpha=.5, label="super-ensamble p10–p90")]
-        marcas += [Line2D([], [], color=c, lw=1.3, ls=(0, (4, 2)), label=n)
+        marcas += [Line2D([], [], color=c, lw=1.4, label=n)
                    for n, _, _, _, _, c in modelos]
     else:
         marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
                   Patch(color=AZUL, alpha=.85, label="pronóstico mediana")]
-    marcas += [Line2D([], [], color=c, lw=1.4, label=f"observado* {n}") for n, _, _, c in obs]
+    marcas += [Line2D([], [], color=c, lw=lw_obs, label=f"observado* {n}") for n, _, _, c in obs]
     _leyenda(ax, marcas)
     return _guarda(fig, formato)
 
 
-def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie, modelos=None):
+def acumulado(formato, ts, a10, a50, a90, obs, ahora, subtitulo, pie, modelos=None,
+              lw_obs=1.4):
     """obs: lista de (etiqueta_grupo, x, y, color), una por estación.
     modelos: lista de (nombre, x, p10, mediana, p90, color) por modelo."""
     fig, ax = _base("Acumulado desde el inicio (mm)", subtitulo, pie)
     if modelos:
         for _, x, q10, q50, q90, col in modelos:
-            ax.fill_between(x, q10, q90, color=col, alpha=.12, lw=0)
-            ax.plot(x, q50, color=col, lw=1.6, ls=(0, (4, 2)))
+            ax.fill_between(x, q10, q90, color=col, alpha=.25, lw=0)
+            ax.plot(x, q50, color=col, lw=1.6)
     else:
         ax.fill_between(ts, a10, a90, color=BANDA, alpha=.6, lw=0)
         ax.plot(ts, a50, color=AZUL, lw=2)
     vistos = {}
     for n, x, y, col in obs:
-        ax.plot(x, y, color=col, lw=1.1)
+        ax.plot(x, y, color=col, lw=lw_obs * .8)
         vistos.setdefault(n, col)
     _ahora(ax, ahora)
     ax.set_xlim(ts[0], ts[-1])
     ax.set_ylim(0, None)
     if modelos:
-        marcas = [Line2D([], [], color=c, lw=1.6, ls=(0, (4, 2)), label=f"{n} (p10–p90)")
+        marcas = [Line2D([], [], color=c, lw=1.6, label=f"{n} (p10–p90)")
                   for n, _, _, _, _, c in modelos]
     else:
         marcas = [Patch(color=BANDA, alpha=.6, label="pronóstico p10–p90"),
                   Line2D([], [], color=AZUL, lw=2, label="pronóstico mediana")]
-    marcas += [Line2D([], [], color=c, lw=1.1, label=f"observado* {n}")
+    marcas += [Line2D([], [], color=c, lw=lw_obs * .8, label=f"observado* {n}")
                for n, c in vistos.items()]
     _leyenda(ax, marcas)
     return _guarda(fig, formato)

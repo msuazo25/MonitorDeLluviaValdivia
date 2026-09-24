@@ -30,16 +30,18 @@ st.markdown("""
 lluvia de la hora que *termina* en esa marca (por ejemplo, 14:00 = de 13:00 a
 14:00). Las horas con mediciones incompletas no se usan en el gráfico por hora.
 
-**Grupos.** Las estaciones se agrupan por ubicación:
+**Zonas.** Las estaciones se agrupan en tres zonas según su ubicación:
 """ + "\n".join(f"- **{g}:** " + ", ".join(e["nombre"] for e in F.ESTACIONES if e["grupo"] == g)
                  for g in F.GRUPOS) + """
 
-- *Gráfico por hora:* promedio horario de las estaciones de cada grupo.
+- *Gráfico por hora:* promedio horario de las estaciones de la zona elegida
+  (o la estación elegida).
 - *Cifras de arriba y tarjetas:* rango entre la estación con menos y la con
-  más lluvia del grupo.
-- *Gráfico acumulado:* una línea por estación, con el color de su grupo.
+  más lluvia de la zona.
+- *Gráfico acumulado:* una línea por estación de la zona, con su color.
 - *Mapa:* total de cada estación en el período elegido, hasta su última
-  medición. Colores: < 25 · 25–50 · 50–75 · 75–100 · 100–150 · > 150 mm.
+  medición, en una escala de azules (más oscuro = más lluvia); las estaciones
+  de la zona elegida llevan un anillo de su color. Tramos: < 25 · 25–50 · 50–75 · 75–100 · 100–150 · > 150 mm.
 
 **Calidad.** Son datos en tiempo casi real, **preliminares y sin control de
 calidad**: pueden tener vacíos, atrasos o errores que las instituciones
@@ -54,9 +56,10 @@ meteorológicos. Un pronóstico por conjuntos corre el mismo modelo muchas veces
 con condiciones iniciales levemente distintas; cada corrida es un **miembro**
 y la dispersión entre miembros muestra la incertidumbre del pronóstico.
 
-Los datos se descargan de la **Ensemble API de Open-Meteo** para el punto de
-Valdivia ({F.LAT:.2f}°, {F.LON:.2f}°): precipitación horaria y ráfaga de viento
-a 10 m, 3 días hacia atrás y 4 hacia adelante.
+Los datos se descargan de la **Ensemble API de Open-Meteo** en la ubicación de
+cada estación: precipitación horaria y ráfaga de viento a 10 m, 3 días hacia
+atrás y 4 hacia adelante. Open-Meteo entrega el valor de la **celda de la
+grilla** del modelo más cercana a cada punto, no el del punto exacto.
 """)
 st.dataframe(pd.DataFrame([
     {"Modelo": n, "Centro": c, "Miembros": k, "Resolución": r, "Se actualiza": a}
@@ -66,6 +69,24 @@ st.caption("Miembros y frecuencia según la documentación de Open-Meteo. Resolu
            "Los modelos con salida cada 3 h se entregan interpolados a series horarias.")
 
 st.markdown("""
+#### Pronóstico por zona
+
+Las estaciones no caen todas en la misma celda. En los modelos de 0,25° las
+siete estaciones quedan en tres celdas: una para Valdivia, Isla Teja,
+Llancahue y Curiñanco; otra para Corral, Corral ESSAL y Chaihuín, y otra para
+Pichoy. En GEPS (0,5°) quedan en cuatro celdas.
+
+Por eso el visor compara cada zona con su propio pronóstico:
+
+- **Zona:** para cada miembro del ensamble se promedia, hora a hora, la lluvia
+  pronosticada en la celda de cada estación de la zona. Así se compara lo
+  mismo que en lo observado, que también es el promedio de esas estaciones.
+  Si dos estaciones comparten celda, esa celda cuenta dos veces.
+- **Estación elegida:** se usa solo la celda de esa estación.
+
+Los percentiles (ver abajo) se calculan después de promediar, sobre los
+miembros ya promediados.
+
 #### Super-ensamble: igual peso por modelo
 
 El **super-ensamble** junta los miembros de los cuatro modelos en una sola
@@ -81,8 +102,9 @@ distintos centros, porque la mejora de un conjunto multimodelo viene sobre
 todo de sumar modelos distintos.
 
 En la vista **Por modelo** se muestra la mediana de cada modelo por separado
-(línea punteada) y, en el acumulado, su rango p10–p90. Las cifras de arriba y
-las tarjetas siguen usando el super-ensamble.
+(línea sólida en tonos pastel) y, en el acumulado, su rango p10–p90; lo
+observado va encima, más grueso y en colores más vivos. Las cifras de arriba
+y las tarjetas siguen usando el super-ensamble.
 
 #### Mediana y rango p10–p90
 
@@ -107,12 +129,12 @@ st.markdown("### 3. Cómo se calcula cada cifra")
 st.markdown("""
 | Elemento | Cálculo |
 |---|---|
-| **Faltan desde las HH h** | Para cada miembro se suma la lluvia pronosticada desde la hora actual hasta el fin del período; se muestran la mediana y el rango p10–p90 de esos totales. |
-| **Gráfico por hora** | Mediana (barras) y rango p10–p90 (banda) hora a hora; líneas de colores: promedio observado de cada grupo. Línea roja: hora actual. |
+| **Cifras de arriba (por zona)** | *Observado:* rango entre estaciones de la zona. *Faltan desde las HH h:* para cada miembro se suma la lluvia pronosticada para la zona desde la hora actual hasta el fin del período; se muestran la mediana y el rango p10–p90 de esos totales. |
+| **Gráfico por hora** | Pronóstico de la zona (o estación) elegida: mediana (barras) y rango p10–p90 (banda) hora a hora; línea de color: promedio observado de la zona. Línea roja: hora actual. |
 | **Gráfico acumulado** | Acumulado de cada miembro desde el inicio del período; mediana y p10–p90 de esos acumulados. |
-| **Tarjetas cada 6 horas** | Lluvia total de cada miembro en el bloque de 6 h; mediana y p10–p90. El color del número indica intensidad: débil (< 10 mm), moderada (10–25 mm) o fuerte (> 25 mm) en 6 h. **Ráfaga:** mediana de la ráfaga máxima de cada miembro en el bloque. En bloques pasados se agrega lo observado por grupo. |
+| **Tarjetas cada 6 horas** | Pronóstico de la zona (o estación) elegida: lluvia total de cada miembro en el bloque de 6 h; mediana y p10–p90. El color del número indica intensidad: débil (< 10 mm), moderada (10–25 mm) o fuerte (> 25 mm) en 6 h. **Ráfaga:** mediana de la ráfaga máxima de cada miembro en el bloque. En bloques pasados se agrega lo observado en la zona. |
 | **Horizontes rápidos** | *Últimas N h* reemplaza el inicio del período por la hora actual menos N; *próximas N h*, el fin por la hora actual más N. El máximo es 72 h: VIPNet entrega 72 h hacia atrás y el pronóstico se descarga para 4 días. |
-| **Descargas** | Los gráficos se redibujan en PNG (600 dpi) o PDF, con el período, la estación o grupo y el modo de pronóstico elegidos. |
+| **Descargas** | Los gráficos se redibujan en PNG (600 dpi) o PDF, con el período, la zona o estación y el modo de pronóstico elegidos. |
 
 Los datos se descargan al abrir la página y se guardan **una hora**; después
 de ese plazo, la siguiente visita vuelve a descargarlos.
@@ -121,10 +143,11 @@ de ese plazo, la siguiente visita vuelve a descargarlos.
 # ------------------------------------------------------------------ límites
 st.markdown("### 4. Limitaciones")
 st.markdown("""
-- **Punto de grilla vs. estación.** El pronóstico representa un promedio sobre
-  una celda de 25 a 50 km según el modelo, no el punto exacto de cada estación. La lluvia real
-  varía mucho entre costa, ciudad y cordillera; es normal que las estaciones
-  de la costa superen el pronóstico o que el interior quede bajo él.
+- **Celda vs. estación.** Aunque cada zona usa las celdas de sus estaciones,
+  el pronóstico representa un promedio sobre celdas de 25 a 50 km según el
+  modelo, no el punto exacto de cada estación. Los modelos globales suavizan
+  el relieve, así que suelen quedarse cortos en la lluvia que refuerza la
+  cordillera de la Costa.
 - **Sin corrección de sesgo.** Los modelos se usan tal como vienen, sin
   ajustarlos con el historial de las estaciones.
 - **Datos preliminares.** Las observaciones no tienen control de calidad.

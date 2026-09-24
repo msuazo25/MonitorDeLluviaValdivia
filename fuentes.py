@@ -37,9 +37,10 @@ GRUPOS = {"costa": "#00797C", "ciudad": "#E0701A", "interior": "#6B3FA0"}
 LAT, LON = -39.8142, -73.2459
 MODELOS = {"gfs025": "GEFS", "ecmwf_ifs025": "IFS-ENS",
            "icon_global": "ICON-EPS", "gem_global": "GEPS"}
-# línea punteada en los gráficos "por modelo"
-COLOR_MODELO = {"gfs025": "#E377C2", "ecmwf_ifs025": "#34495E",
-                "icon_global": "#7A8B1F", "gem_global": "#C9A227"}
+# colores pastel de los gráficos "por modelo": tonos lejos del turquesa, naranja
+# y violeta de lo observado (visor.VIVO), que va encima, más grueso y vivo
+COLOR_MODELO = {"gfs025": "#F797BF", "ecmwf_ifs025": "#B7C9FB",
+                "icon_global": "#A9E28C", "gem_global": "#F7E57E"}
 # para la página de metodología (documentación de Open-Meteo Ensemble API)
 INFO_MODELO = {
     "gfs025": ("GEFS", "NOAA/NCEP (EE. UU.)", 31, "0,25° (~25 km), cada 3 h", "cada 6 h"),
@@ -201,43 +202,57 @@ def corrida(m):
     return pd.Timestamp(r.json()["last_run_initialisation_time"], unit="s")
 
 
-def ensamble_modelo(m, pasado=3, dias=4):
-    """Un modelo del ensamble: t (hora de Chile), precipitación y ráfaga
-    (miembros x horas). Devuelve None si Open-Meteo no responde."""
+def ensamble_modelo(m, pasado=3, dias=4, puntos=None):
+    """Un modelo del ensamble: t (hora de Chile), precipitación y ráfaga.
+
+    Sin puntos: el punto de Valdivia (LAT, LON), matrices miembros x horas.
+    Con puntos [(lat, lon), ...]: una sola consulta y arreglos
+    puntos x miembros x horas; Open-Meteo usa la celda más cercana a cada
+    punto. Devuelve None si Open-Meteo no responde."""
+    uno = puntos is None
+    puntos = [(LAT, LON)] if uno else puntos
     r = requests.get("https://ensemble-api.open-meteo.com/v1/ensemble", params=dict(
-        latitude=LAT, longitude=LON, models=m,
+        latitude=",".join(f"{la:.4f}" for la, _ in puntos),
+        longitude=",".join(f"{lo:.4f}" for _, lo in puntos), models=m,
         hourly="precipitation,wind_gusts_10m", past_days=pasado,
         forecast_days=dias, timezone="UTC"), headers=UA, timeout=90)
     if not r.ok:
         return None
-    h = r.json()["hourly"]
-    t = pd.to_datetime(h["time"]) + pd.Timedelta(hours=TZ_CHILE)
+    j = r.json()
+    j = j if isinstance(j, list) else [j]
+    t = pd.to_datetime(j[0]["hourly"]["time"]) + pd.Timedelta(hours=TZ_CHILE)
 
     def mat(var):
-        k = sorted(c for c in h if c == var or c.startswith(var + "_member"))
-        M = np.array([[np.nan if v is None else v for v in h[c]] for c in k], float)
-        return M[np.isfinite(M).any(axis=1)] if M.size else M
+        cols = sorted(c for c in j[0]["hourly"] if c == var or c.startswith(var + "_member"))
+        M = np.array([[[np.nan if v is None else v for v in x["hourly"][c]] for c in cols]
+                      for x in j], float).reshape(len(j), len(cols), len(t))
+        # fuera los miembros sin datos (los mismos en todos los puntos)
+        M = M[:, np.isfinite(M).any(axis=(0, 2))]
+        return M[0] if uno else M
     return t, mat("precipitation"), mat("wind_gusts_10m")
 
 
 def ensamble(pasado=3, dias=4):
-    """Super-ensamble horario (precipitacion y rafaga) de 4 centros.
+    """Super-ensamble horario (precipitación y ráfaga) de 4 centros, en la
+    celda de cada estación de ESTACIONES.
 
-    Devuelve t, pp, raf, mod_pp, mod_raf: mod_* dice de qué modelo es cada
-    fila (miembro) de pp y de raf."""
+    Devuelve t, pp, raf, mod_pp, mod_raf: pp y raf son estaciones x miembros
+    x horas (en el orden de ESTACIONES) y mod_* dice de qué modelo es cada
+    miembro."""
+    puntos = [(e["lat"], e["lon"]) for e in ESTACIONES]
     pp, raf, mod_pp, mod_raf, t = [], [], [], [], None
     for m in MODELOS:
-        res = ensamble_modelo(m, pasado, dias)
+        res = ensamble_modelo(m, pasado, dias, puntos)
         if res is None:
             continue
         t, p, g = res
         if p.size:
             pp.append(p)
-            mod_pp += [m] * len(p)
+            mod_pp += [m] * p.shape[1]
         if g.size:
             raf.append(g)
-            mod_raf += [m] * len(g)
+            mod_raf += [m] * g.shape[1]
     if not pp:
         raise RuntimeError("Open-Meteo no respondió")
-    return (t, np.vstack(pp), (np.vstack(raf) if raf else None),
+    return (t, np.concatenate(pp, axis=1), (np.concatenate(raf, axis=1) if raf else None),
             np.array(mod_pp), np.array(mod_raf))

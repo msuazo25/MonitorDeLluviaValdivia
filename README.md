@@ -1,7 +1,8 @@
 # Visor de Lluvia · Valdivia
 
 App Streamlit que compara la lluvia observada en estaciones con el
-super-ensamble de pronóstico. Se actualiza sola: descarga los datos al abrirse y
+super-ensamble de pronóstico, por zona (costa, ciudad, interior): el pronóstico
+de cada zona promedia las celdas del modelo donde caen sus estaciones. Se actualiza sola: descarga los datos al abrirse y
 los guarda en caché 1 hora.
 
 ## Correr en tu computador
@@ -62,7 +63,8 @@ La app se duerme tras unos días sin visitas; la primera visita la despierta.
 
 Una tarea de GitHub Actions (`.github/workflows/archivo.yml`) corre cada hora
 `tareas/archivar.py` y guarda en la rama **`datos`** lo observado en cada
-estación y cada corrida nueva del ensamble (ver el README de esa rama).
+estación y cada corrida nueva del ensamble en la celda de cada estación (ver
+el README de esa rama).
 
 - Para incluir las estaciones de la DMC, agregar `DMC_USUARIO` y `DMC_TOKEN` en
   *Settings → Secrets and variables → Actions* del repositorio.
@@ -72,7 +74,9 @@ estación y cada corrida nueva del ensamble (ver el README de esa rama).
 
 ## Ajustes frecuentes
 
-- Estaciones, grupos y colores: `ESTACIONES` y `GRUPOS` en `fuentes.py`.
+- Estaciones, zonas y colores: `ESTACIONES` y `GRUPOS` en `fuentes.py`; íconos de
+  zona, colores vivos del observado y escala del mapa en `visor.py` (`ZONAS`,
+  `VIVO`, `ESCALA_MAPA`).
 - Modelos del pronóstico y sus colores: `MODELOS`, `COLOR_MODELO` e `INFO_MODELO` en `fuentes.py`.
 - Período: barra lateral. Horizontes rápidos (últimas y próximas 12, 24, 36 o 72 h;
   72 h es lo que cubren VIPNet y el ensamble) o fechas del evento (por defecto

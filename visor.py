@@ -27,12 +27,17 @@ MODOS = {"super": "Super-ensamble", "modelo": "Por modelo"}
 DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 ESRI = ("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/"
         "MapServer/tile/{z}/{y}/{x}")
-ESCALA_MAPA = [(25, "#FFF3B0"), (50, "#B8E186"), (75, "#41B6C4"),
-               (100, "#2C7FB8"), (150, "#8856A7"), (np.inf, "#E7298A")]
+# escala de un solo tono (azules) para no confundirse con los colores de zona
+ESCALA_MAPA = [(25, "#DEEBF7"), (50, "#9ECAE1"), (75, "#6BAED6"),
+               (100, "#3182BD"), (150, "#08519C"), (np.inf, "#08306B")]
 
 
 
 GRIS_BANDA = "rgba(150,150,150,.25)"
+# selector de zona y observado en la vista "por modelo" (más vivo que F.GRUPOS)
+ZONAS = {"costa": ":material/waves:", "ciudad": ":material/location_city:",
+         "interior": ":material/landscape:"}
+VIVO = {"costa": "#00B5B8", "ciudad": "#FF7A00", "interior": "#9446F0"}
 
 
 def rgba(hexcolor, alfa):
@@ -52,8 +57,8 @@ st.markdown("""<style>
 @media (max-width: 640px) {
   .st-key-metricas [data-testid="stHorizontalBlock"] { flex-wrap: wrap; gap: .5rem 1rem; }
   .st-key-metricas [data-testid="stColumn"] {
-    flex: 1 1 calc(50% - 1rem) !important; min-width: calc(50% - 1rem) !important; }
-  .st-key-metricas [data-testid="stMetricValue"] { font-size: 1.7rem; }
+    flex: 1 1 100% !important; min-width: 100% !important; }
+  .st-key-metricas [data-testid="stMetricValue"] { font-size: 1.6rem; }
   h2 { font-size: 1.7rem !important; }
 }
 </style>""", unsafe_allow_html=True)
@@ -166,6 +171,15 @@ WR = F.pesos(MR, "igual") if RAF is not None else None
 ahora = pd.Timestamp(t_obs).floor("h")
 est = {e["id"]: e for e in F.ESTACIONES}
 activas = [e for e in F.ESTACIONES if e["id"] in series and not series[e["id"]].empty]
+FILA = {e["id"]: k for k, e in enumerate(F.ESTACIONES)}      # fila de PP y RAF
+
+
+def pronostico(ids):
+    """Pronóstico (miembros x horas) promediado, miembro a miembro, sobre la
+    celda de cada estación de ids; con una estación, su propia celda."""
+    k = [FILA[i] for i in ids]
+    return PP[k].mean(axis=0), (RAF[k].mean(axis=0) if RAF is not None else None)
+
 
 # acumulado del evento por estacion (hasta la ultima medicion)
 totales = {}
@@ -174,26 +188,14 @@ for e in activas:
     ev = o[(o.hora_local > inicio) & (o.hora_local <= fin)]
     totales[e["id"]] = (ev.mm.sum(), ev.hora_local.max() if len(ev) else None)
 
-# pronostico en la ventana del evento
+# ventana del evento y lo que falta desde ahora, por grupo
 sel_t = (t > inicio - pd.Timedelta(hours=1)) & (t <= fin)
-ts, P = t[sel_t], PP[:, sel_t]
-p10, med, p90 = F.cuantiles(P, W, [10, 50, 90])
-acum = np.nancumsum(np.where(ts > inicio, P, 0.0), axis=1)
-a10, a50, a90 = F.cuantiles(acum, W, [10, 50, 90])
-resto = np.nansum(np.where((ts > ahora) & (ts <= fin), P, 0.0), axis=1)
-r10, r50, r90 = F.cuantiles(resto, W, [10, 50, 90])
-
-# mismo resumen para cada modelo por separado
-por_modelo = []
-for m, nombre_m in F.MODELOS.items():
-    fila = MP == m
-    if not fila.any():
-        continue
-    wm = np.full(fila.sum(), 1.0 / fila.sum())
-    por_modelo.append(dict(
-        id=m, nombre=nombre_m, color=F.COLOR_MODELO[m], n=int(fila.sum()),
-        hora=F.cuantiles(P[fila], wm, [10, 50, 90]),
-        acum=F.cuantiles(acum[fila], wm, [10, 50, 90])))
+ts = t[sel_t]
+falta_t = (ts > ahora) & (ts <= fin)
+ids_grupo = {g: [e["id"] for e in F.ESTACIONES if e["grupo"] == g] for g in F.GRUPOS}
+resto_grupo = {g: F.cuantiles(np.nansum(np.where(falta_t, pronostico(ids)[0][:, sel_t], 0.0),
+                                        axis=1), W, [10, 50, 90])
+               for g, ids in ids_grupo.items()}
 
 # ------------------------------------------------------------------ encabezado
 col_tit, col_logo = st.columns([5, 1.3], vertical_alignment="center")
@@ -207,25 +209,50 @@ with col_logo:
 
 sin_credencial = [e["nombre"] for e in F.ESTACIONES
                   if e["fuente"] == "dmc" and e["id"] not in series]
-c = st.container(key="metricas").columns(4)
-for col, g in zip(c[:3], F.GRUPOS):
+c = st.container(key="metricas").columns(3)
+for col, g in zip(c, F.GRUPOS):
     v = [totales[e["id"]][0] for e in activas if e["grupo"] == g]
     txt = "—" if not v else (f"{min(v):.0f}–{max(v):.0f}" if len(v) > 1
                              else f"{v[0]:.0f}")
-    col.metric(f"Observado* {g} (mm)", txt,
-               help=None if v else "Estación de la DMC: requiere credenciales.")
-c[3].metric(f"Faltan desde las {ahora:%H} h (mm)", f"{r50:.0f}",
-            f"rango {r10:.0f}–{r90:.0f}", delta_color="off")
+    q10, q50, q90 = resto_grupo[g]
+    col.metric(f"{g.capitalize()} · observado* (mm)", txt,
+               f"faltan {q50:.0f} ({q10:.0f}–{q90:.0f}) desde las {ahora:%H} h",
+               delta_color="off", delta_arrow="off",
+               help="Observado: rango entre las estaciones del grupo. Faltan: pronóstico "
+                    "desde ahora hasta el fin del período, mediana (p10–p90)."
+                    + ("" if v else " Estación de la DMC: requiere credenciales."))
+
+# ------------------------------------------------------------------ zona
+st.markdown("**Zona**")
+zona = st.segmented_control(
+    "Zona", list(F.GRUPOS), key="zona", default="ciudad", required=True,
+    format_func=lambda g: f"{ZONAS[g]} {g.capitalize()}", label_visibility="collapsed",
+    width="stretch")
+# cada botón elegido con el color de su grupo
+st.markdown("<style>.st-key-zona button{min-height:2.8rem;font-weight:600}" + "".join(
+    f".st-key-zona button:nth-of-type({k + 1}){{color:{colg}}}"
+    f".st-key-zona button:nth-of-type({k + 1})[aria-checked='true']"
+    f"{{background:{colg}!important;border-color:{colg}!important}}"
+    f".st-key-zona button:nth-of-type({k + 1})[aria-checked='true'] *{{color:white}}"
+    for k, colg in enumerate(F.GRUPOS.values())) + "</style>", unsafe_allow_html=True)
+colz = F.GRUPOS[zona]
 
 # ------------------------------------------------------------------ mapa
 col_mapa, col_graf = st.columns([5, 7], gap="medium")
 with col_mapa:
-    st.markdown("**Acumulado observado\\*** · elige una estación en los botones bajo el mapa")
+    st.markdown("**Acumulado observado\\*** · toca una estación para verla sola")
     lat = [e["lat"] for e in activas]
     lon = [e["lon"] for e in activas]
     mm = [totales[e["id"]][0] for e in activas]
     colores = [next(c for lim, c in ESCALA_MAPA if v < lim) for v in mm]
+    # anillo del color de la zona elegida y borde blanco para todas
     fmap = go.Figure(go.Scattermap(
+        lat=[e["lat"] for e in activas if e["grupo"] == zona],
+        lon=[e["lon"] for e in activas if e["grupo"] == zona], mode="markers",
+        marker=dict(size=27, color=colz), hoverinfo="skip"))
+    fmap.add_trace(go.Scattermap(lat=lat, lon=lon, mode="markers",
+                                 marker=dict(size=20, color="white"), hoverinfo="skip"))
+    fmap.add_trace(go.Scattermap(
         lat=lat, lon=lon, mode="markers+text",
         marker=dict(size=16, color=colores),
         text=[f"{e['nombre'].replace(' (DMC)', '')} {v:.0f}" for e, v in zip(activas, mm)],
@@ -241,13 +268,15 @@ with col_mapa:
         clickmode="event+select")
     evento = st.plotly_chart(fmap, on_select="rerun", selection_mode="points",
                              key="mapa", config=barra("resetViewMap"))
-    st.caption("Colores: < 25 · 25–50 · 50–75 · 75–100 · 100–150 · > 150 mm. "
+    st.caption("Azul más oscuro = más lluvia: < 25 · 25–50 · 50–75 · 75–100 · "
+               "100–150 · > 150 mm. Anillo: estaciones de la zona elegida. "
                "Imagen: Esri World Imagery.")
 
     # seleccion: botones (funcionan en celular) o clic en el mapa
-    opciones = {"Grupos": None} | {e["nombre"].replace(" (DMC)", ""): e["id"]
-                                   for e in activas}
-    boton = st.pills("Ver", list(opciones), default="Grupos", key="pick",
+    toda = f"Toda la zona {zona}"
+    opciones = {toda: None} | {e["nombre"].replace(" (DMC)", ""): e["id"]
+                               for e in activas if e["grupo"] == zona}
+    boton = st.pills("Ver", list(opciones), default=toda, key=f"pick_{zona}",
                      label_visibility="collapsed")
     if sin_credencial:
         st.caption(f"Sin datos de {', '.join(sin_credencial)}: la DMC exige usuario "
@@ -256,19 +285,50 @@ with col_mapa:
 elegida = opciones.get(boton) if boton else None
 try:
     pts = evento.selection.points
-    if pts:
+    if pts and pts[0].get("curve_number", 2) == 2:
         cd = pts[0].get("customdata")
         elegida = cd[0] if isinstance(cd, list) else cd
 except Exception:                                                # noqa: BLE001
     pass
 
+# pronóstico de la zona (promedio de las celdas de sus estaciones) o de la estación
+if elegida:
+    Pz, Rz = pronostico([elegida])
+    donde = f"{est[elegida]['nombre']} (celda de la estación)"
+else:
+    Pz, Rz = pronostico(ids_grupo[zona])
+    n_z = len(ids_grupo[zona])
+    donde = f"zona {zona} (" + (f"celdas de {n_z} estaciones)" if n_z > 1 else "celda de su estación)")
+P = Pz[:, sel_t]
+p10, med, p90 = F.cuantiles(P, W, [10, 50, 90])
+acum = np.nancumsum(np.where(ts > inicio, P, 0.0), axis=1)
+a10, a50, a90 = F.cuantiles(acum, W, [10, 50, 90])
+r10, r50, r90 = F.cuantiles(np.nansum(np.where(falta_t, P, 0.0), axis=1), W, [10, 50, 90])
+
+# mismo resumen para cada modelo por separado
+por_modelo = []
+for m, nombre_m in F.MODELOS.items():
+    fila = MP == m
+    if not fila.any():
+        continue
+    wm = np.full(fila.sum(), 1.0 / fila.sum())
+    por_modelo.append(dict(
+        id=m, nombre=nombre_m, color=F.COLOR_MODELO[m], n=int(fila.sum()),
+        hora=F.cuantiles(P[fila], wm, [10, 50, 90]),
+        acum=F.cuantiles(acum[fila], wm, [10, 50, 90])))
+
+# observado: más grueso y vivo sobre los modelos en pastel
+ANCHO_OBS = 3.6 if modo == "modelo" else 2.4
+COLOR_OBS = VIVO if modo == "modelo" else F.GRUPOS
+
 # ------------------------------------------------------------------ descargas
-quien = est[elegida]["nombre"] if elegida else "por grupo (media de estaciones)"
+quien = (est[elegida]["nombre"] if elegida
+         else f"zona {zona} (media de estaciones)")
 sub_desc = (f"Valdivia y Corral · {quien} · {inicio:%d/%m %H:%M} → {fin:%d/%m %H:%M} · "
             f"actualizado {t_obs:%d/%m %H:%M} (hora de Chile)")
 TXT_PESO = "igual peso por modelo"
 pie_desc = (f"* Observado: VIPNet (DGA/MOP) y DMC, datos preliminares.\nPronóstico: "
-            f"{PP.shape[0]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (Open-Meteo), "
+            f"{PP.shape[1]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (Open-Meteo) en {donde}, "
             f"super-ensamble con {TXT_PESO}; consultado el {t_pron:%d/%m %H:%M}.\n"
             f"Visor de Lluvia · Valdivia — Manuel Suazo, Laboratorio de Dendrocronología "
             f"y Cambio Global, UACh · {CUENTA}")
@@ -297,16 +357,16 @@ with col_graf:
                         icon=":material/help:")
     if elegida:
         st.markdown(f"**{est[elegida]['nombre']}** · "
-                    f"{totales[elegida][0]:.0f} mm desde el inicio. "
-                    "Elige «Grupos» para volver a la vista por grupo.")
-        curvas = [(est[elegida]["nombre"], [series[elegida]],
-                   F.GRUPOS.get(est[elegida]["grupo"], "#111"))]
+                    f"{totales[elegida][0]:.0f} mm desde el inicio. Pronóstico en la "
+                    f"celda de la estación. Elige «{toda}» para volver a la zona.")
+        grupo_c = est[elegida]["grupo"]
+        curvas = [(est[elegida]["nombre"], [series[elegida]], grupo_c)]
     else:
-        curvas = []
-        for g, colg in F.GRUPOS.items():
-            miembros = [series[e["id"]] for e in activas if e["grupo"] == g]
-            if miembros:
-                curvas.append((f"{g} ({len(miembros)} est.)", miembros, colg))
+        miembros = [series[e["id"]] for e in activas if e["grupo"] == zona]
+        n_est = len(ids_grupo[zona])
+        st.markdown(f"**Zona {zona}** · pronóstico promediado sobre la celda de "
+                    f"{'cada una de sus ' + str(n_est) + ' estaciones' if n_est > 1 else 'su estación'}.")
+        curvas = [(f"{zona} ({len(miembros)} est.)", miembros, zona)] if miembros else []
 
     # (a) por hora
     obs_h, obs_a = [], []
@@ -317,7 +377,7 @@ with col_graf:
                                 name="super-ensamble p10–p90", hoverinfo="skip"))
         for d in por_modelo:
             fa.add_trace(go.Scatter(x=ts, y=d["hora"][1], mode="lines",
-                                    line=dict(color=d["color"], width=2, dash="dash"),
+                                    line=dict(color=d["color"], width=2.2),
                                     name=f"{d['nombre']} mediana"))
     else:
         fa.add_trace(go.Scatter(x=np.r_[ts, ts[::-1]], y=np.r_[p90, p10[::-1]],
@@ -325,25 +385,25 @@ with col_graf:
                                 name="pronóstico p10–p90", hoverinfo="skip"))
         fa.add_trace(go.Bar(x=ts, y=med, marker_color=AZUL, name="pronóstico mediana",
                             opacity=.85))
-    for nombre, miembros, colg in curvas:
+    for nombre, miembros, g in curvas:
         tab = pd.concat([F.horaria(o) for o in miembros], axis=1)
         tab = tab[(tab.index > inicio) & (tab.index <= ahora)]
-        obs_h.append((nombre, tab.index, tab.mean(axis=1).values, colg))
+        obs_h.append((nombre, tab.index, tab.mean(axis=1).values, COLOR_OBS[g]))
         fa.add_trace(go.Scatter(x=tab.index, y=tab.mean(axis=1), mode="lines",
-                                line=dict(color=colg, width=2.4),
+                                line=dict(color=COLOR_OBS[g], width=ANCHO_OBS),
                                 name=f"observado* {nombre}"))
     fa.add_vline(x=ahora, line_color=ROJO, line_width=1.5)
-    fa.update_layout(title="Precipitación por hora (mm)",
-                     height=410 if modo == "modelo" else 360,
+    fa.update_layout(title=f"Precipitación por hora (mm) · {elegida and est[elegida]['nombre'] or zona}",
+                     height=400 if modo == "modelo" else 360,
                      margin=dict(l=10, r=10, t=40, b=10), bargap=.15,
-                     legend=dict(orientation="h", y=-.42 if modo == "modelo" else -.3,
+                     legend=dict(orientation="h", y=-.36 if modo == "modelo" else -.3,
                                  yanchor="top"), hovermode="x unified")
     fa.update_xaxes(**EJE_T)
     st.plotly_chart(fa, config=barra("resetScale2d"))
     descargas("por_hora", G.por_hora, ts, p10, p90, med, obs_h, ahora,
               sub_desc, pie_desc,
               [(d["nombre"], ts, *d["hora"], d["color"]) for d in por_modelo]
-              if modo == "modelo" else None)
+              if modo == "modelo" else None, ANCHO_OBS / 2)
 
     # (b) acumulado
     fb = go.Figure()
@@ -351,22 +411,22 @@ with col_graf:
         for d in por_modelo:
             q10, q50, q90 = d["acum"]
             fb.add_trace(go.Scatter(x=np.r_[ts, ts[::-1]], y=np.r_[q90, q10[::-1]],
-                                    fill="toself", fillcolor=rgba(d["color"], .13),
+                                    fill="toself", fillcolor=rgba(d["color"], .22),
                                     line=dict(width=0), hoverinfo="skip", showlegend=False))
             fb.add_trace(go.Scatter(x=ts, y=q50, name=d["nombre"],
-                                    line=dict(color=d["color"], width=2.2, dash="dash")))
+                                    line=dict(color=d["color"], width=2.4)))
     else:
         fb.add_trace(go.Scatter(x=np.r_[ts, ts[::-1]], y=np.r_[a90, a10[::-1]],
                                 fill="toself", fillcolor=BANDA, line=dict(width=0),
                                 name="pronóstico p10–p90", hoverinfo="skip"))
         fb.add_trace(go.Scatter(x=ts, y=a50, line=dict(color=AZUL, width=3),
                                 name="pronóstico mediana"))
-    for nombre, miembros, colg in curvas:
+    for nombre, miembros, g in curvas:
         for o in miembros:
             ev = o[(o.hora_local > inicio) & (o.hora_local <= fin)]
-            obs_a.append((nombre, [inicio, *ev.hora_local], [0, *ev.mm.cumsum()], colg))
+            obs_a.append((nombre, [inicio, *ev.hora_local], [0, *ev.mm.cumsum()], COLOR_OBS[g]))
             fb.add_trace(go.Scatter(x=[inicio, *ev.hora_local], y=[0, *ev.mm.cumsum()],
-                                    line=dict(color=colg, width=1.6),
+                                    line=dict(color=COLOR_OBS[g], width=ANCHO_OBS * .75),
                                     name=f"observado* {nombre}", showlegend=False))
     fb.add_vline(x=ahora, line_color=ROJO, line_width=1.5)
     fb.update_layout(title=dict(text="Acumulado desde el inicio (mm)",
@@ -383,10 +443,10 @@ with col_graf:
               f"{sub_desc} · pronóstico total {a50[-1]:.0f} mm "
               f"({a10[-1]:.0f}–{a90[-1]:.0f})", pie_desc,
               [(d["nombre"], ts, *d["acum"], d["color"]) for d in por_modelo]
-              if modo == "modelo" else None)
+              if modo == "modelo" else None, ANCHO_OBS / 2)
 
     if modo == "modelo":
-        st.markdown("**Total pronosticado en el período, por modelo**")
+        st.markdown(f"**Total pronosticado en el período, por modelo** · {elegida and est[elegida]['nombre'] or 'zona ' + zona}")
         st.dataframe(pd.DataFrame([{
             "Modelo": d["nombre"], "Miembros": d["n"],
             "Mediana (mm)": round(float(d["acum"][1][-1])),
@@ -395,15 +455,18 @@ with col_graf:
         } for d in por_modelo]), hide_index=True, width="stretch")
 
 # ------------------------------------------------------------------ tarjetas 6 h
-st.markdown("**Lluvia esperada cada 6 horas** (mediana del super-ensamble con "
+lugar = est[elegida]["nombre"] if elegida else f"zona {zona}"
+st.markdown(f"**Lluvia esperada cada 6 horas · {lugar}** (mediana del super-ensamble con "
             f"{TXT_PESO}; rango p10–p90)")
+ids_obs = [elegida] if elegida else [e["id"] for e in activas if e["grupo"] == zona]
+ids_obs = [i for i in ids_obs if i in totales]
 bloques, b0 = [], inicio.floor("6h")
 while b0 < fin:
     b1 = b0 + pd.Timedelta(hours=6)
     m = (t > b0) & (t <= b1)
-    q = F.cuantiles(np.nansum(PP[:, m], axis=1), W, [10, 50, 90])
-    rf = (F.cuantiles(np.nanmax(RAF[:, m], axis=1), WR, [50])[0]
-          if RAF is not None else None)
+    q = F.cuantiles(np.nansum(Pz[:, m], axis=1), W, [10, 50, 90])
+    rf = (F.cuantiles(np.nanmax(Rz[:, m], axis=1), WR, [50])[0]
+          if Rz is not None else None)
     bloques.append((b0, b1, q, rf))
     b0 = b1
 html = ['<div style="display:flex;flex-wrap:wrap;gap:8px">']
@@ -412,16 +475,11 @@ for b0, b1, (q10, q50, q90), rf in bloques:
     col = next(c for lim, _, c in NIVELES if q50 < lim)
     borde = f"2px solid {ROJO}" if actual else "1px solid #D6D2CA"
     obs = ""
-    if pasado:
-        partes = []
-        for g, colg in F.GRUPOS.items():
-            v = [series[e["id"]][(series[e["id"]].hora_local > b0) &
-                                 (series[e["id"]].hora_local <= b1)].mm.sum()
-                 for e in activas if e["grupo"] == g]
-            if v:
-                partes.append(f'<span style="color:{colg}">{g} '
-                              f'{min(v):.0f}{"–%.0f" % max(v) if len(v) > 1 else ""}</span>')
-        obs = "<br>".join(partes)
+    if pasado and ids_obs:
+        v = [series[i][(series[i].hora_local > b0) & (series[i].hora_local <= b1)].mm.sum()
+             for i in ids_obs]
+        obs = (f'<span style="color:{colz}">obs. {min(v):.0f}'
+               f'{"–%.0f" % max(v) if len(v) > 1 else ""}</span>')
     fin_h = "24" if b1.hour == 0 else f"{b1:%H}"
     html.append(
         f'<div style="flex:1 1 92px;max-width:130px;border:{borde};border-radius:10px;'
@@ -447,13 +505,12 @@ datos_tarjeta = dict(
              min(v) if (v := [totales[e["id"]][0] for e in activas if e["grupo"] == g]) else None,
              max(v) if v else None, len(v))
             for g, colg in F.GRUPOS.items()],
-    resto=(r10, r50, r90), ts=ts, a10=a10, a50=a50, a90=a90,
-    obs=[([inicio, *ev.hora_local], [0, *ev.mm.cumsum()], F.GRUPOS[e["grupo"]])
-         for e in activas if e["grupo"]
-         for ev in [series[e["id"]][(series[e["id"]].hora_local > inicio) &
-                                    (series[e["id"]].hora_local <= fin)]]],
+    lugar=lugar, resto=(r10, r50, r90), ts=ts, a10=a10, a50=a50, a90=a90,
+    obs=[([inicio, *ev.hora_local], [0, *ev.mm.cumsum()], F.GRUPOS[est[i]["grupo"]])
+         for i in ids_obs
+         for ev in [series[i][(series[i].hora_local > inicio) & (series[i].hora_local <= fin)]]],
     peso=TXT_PESO, cuenta=CUENTA)
-st.markdown("**Compartir** · tarjeta con las cifras de este momento (PNG, 600 dpi)")
+st.markdown(f"**Compartir** · tarjeta con las cifras de este momento, {lugar} (PNG, 600 dpi)")
 fila_t = st.container(horizontal=True, gap="small")
 for tipo, rotulo in (("feed", "Publicación 4:5"), ("historia", "Historia 9:16")):
     fila_t.download_button(
@@ -465,13 +522,14 @@ for tipo, rotulo in (("feed", "Publicación 4:5"), ("historia", "Historia 9:16")
 faltan = [e["nombre"] for e in F.ESTACIONES if e not in activas]
 st.divider()
 st.caption(
-    f"**Pronóstico:** {PP.shape[0]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (vía "
-    f"Open-Meteo), super-ensamble con {TXT_PESO}; consultado el {t_pron:%d/%m %H:%M}. "
+    f"**Pronóstico:** {PP.shape[1]} miembros de GEFS, IFS-ENS, ICON-EPS y GEPS (vía "
+    f"Open-Meteo) en la celda de cada estación, promediados por zona; super-ensamble con "
+    f"{TXT_PESO}; consultado el {t_pron:%d/%m %H:%M}. "
     "Intensidad descriptiva, no equivale a alertas oficiales: seguir siempre a "
     "SENAPRED, DMC y la Municipalidad.  \n"
     "**\\* Observado:** red VIPNet (DGA/MOP)"
     + (" y DMC" if any(e["fuente"] == "dmc" for e in activas) else "")
-    + ". Datos preliminares, pendientes de control de calidad. Grupos: "
+    + ". Datos preliminares, pendientes de control de calidad. Zonas: "
     + "; ".join(f"{g} ({', '.join(e['nombre'] for e in F.ESTACIONES if e['grupo'] == g)})"
                 for g in F.GRUPOS) + "."
     + (f"  \nSin datos en esta actualización: {', '.join(faltan)}." if faltan else ""))
