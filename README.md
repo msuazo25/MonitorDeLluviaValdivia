@@ -81,4 +81,4 @@ el README de esa rama).
 - Modelos del pronóstico y sus colores: `MODELOS`, `COLOR_MODELO` e `INFO_MODELO` en `fuentes.py`.
 - Período: barra lateral. Horizontes rápidos (últimas y próximas 12, 24, 36 o 72 h;
   72 h es lo que cubren VIPNet y el ensamble; por defecto 72 h hacia atrás y 72 h
-  hacia adelante desde la última hora completa) o fechas a mano.
+  hacia adelante desde la última hora completa) o «Rango de fechas».

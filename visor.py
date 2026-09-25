@@ -149,9 +149,9 @@ with st.sidebar:
                                     default=72, format_func=lambda h: f"{h} h")
     st.caption("Sin horizonte elegido se usan las fechas de abajo. "
                "Toca de nuevo un botón para quitarlo.")
-    # fechas a mano: parten de la última hora completa (p. ej. 9:58 -> 9:00)
+    # rango de fechas: parte de la última hora completa (p. ej. 9:58 -> 9:00)
     ya = pd.Timestamp(F.ahora_local()).floor("h")
-    st.markdown("**Fechas a mano**")
+    st.markdown("**Rango de fechas**")
     d0 = st.date_input("Día de inicio", ya.date(), disabled=bool(atras))
     h0 = st.time_input("Hora de inicio", ya.time(), disabled=bool(atras))
     fin0 = ya + pd.Timedelta(hours=72)
