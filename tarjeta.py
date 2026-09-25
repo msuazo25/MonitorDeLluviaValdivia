@@ -32,7 +32,7 @@ def tarjeta(formato, tipo, d):
     """Devuelve los bytes de la tarjeta.
 
     d: t_obs, inicio, fin, ahora, grupos [(nombre, color, mínimo, máximo, n)],
-       lugar, resto (p10, p50, p90), ts, a10, a50, a90, obs [(x, y, color)], peso, cuenta.
+       lugar, txt_atras, txt_adelante, resto (p10, p50, p90), ts, a10, a50, a90, obs [(x, y, color)], peso, cuenta.
     """
     W, H = FORMATOS[tipo]
     fig = Figure(figsize=(W, H), facecolor=PAPEL)
@@ -59,7 +59,7 @@ def tarjeta(formato, tipo, d):
 
     # observado por grupo
     y -= 0.06 if historia else 0.08
-    texto(y, "Observado* desde el inicio (mm)", fontsize=10 * esc, fontweight="bold")
+    texto(y, f"Observado* {d['txt_atras']} (mm)", fontsize=10 * esc, fontweight="bold")
     y -= 0.035 if historia else 0.04
     fila = 0.044 if historia else 0.058
     for nombre, color, vmin, vmax, n in d["grupos"]:
@@ -75,7 +75,7 @@ def tarjeta(formato, tipo, d):
     # pronóstico restante
     y -= 0.012
     r10, r50, r90 = d["resto"]
-    texto(y, f"Pronóstico {d['lugar']}, desde las {d['ahora']:%H} h", fontsize=10 * esc,
+    texto(y, f"Pronóstico {d['lugar']} {d['txt_adelante']}", fontsize=10 * esc,
           fontweight="bold")
     y -= 0.035 if historia else 0.04
     fig.text(x0, y, f"{r50:.0f} mm", fontsize=30 * esc, fontweight="bold", color=AZUL, va="top")

@@ -136,12 +136,12 @@ st.markdown("### 3. Cómo se calcula cada cifra")
 st.markdown("""
 | Elemento | Cálculo |
 |---|---|
-| **Cifras de arriba (por zona)** | *Observado:* rango entre estaciones de la zona. *Faltan desde las HH h:* para cada miembro se suma la lluvia pronosticada para la zona desde la hora actual hasta el fin del período; se muestran la mediana y el rango p10–p90 de esos totales. |
+| **Cifras de arriba (por zona)** | *Observado las últimas N h:* rango entre estaciones de la zona. *Pronóstico para las próximas N h:* para cada miembro se suma la lluvia pronosticada para la zona desde la hora actual hasta el fin del período; se muestran la mediana y el rango p10–p90 de esos totales. |
 | **Gráfico por hora** | Pronóstico de la zona (o estación) elegida: mediana (barras) y rango p10–p90 (banda) hora a hora; línea de color: promedio observado de la zona. Línea roja: hora actual. |
 | **Gráfico acumulado** | Acumulado de cada miembro desde el inicio del período; mediana y p10–p90 de esos acumulados. |
 | **Tarjetas cada 6 horas** | Pronóstico de la zona (o estación) elegida: lluvia total de cada miembro en el bloque de 6 h; mediana y p10–p90. El color del número indica intensidad: débil (< 10 mm), moderada (10–25 mm) o fuerte (> 25 mm) en 6 h. **Ráfaga:** mediana de la ráfaga máxima de cada miembro en el bloque. En bloques pasados se agrega lo observado en la zona. |
 | **Eje vertical** | Es el mismo en las tres zonas (el máximo de lo que se dibujaría en cualquiera de ellas en el período), para que al cambiar de zona las alturas se puedan comparar. Al elegir una estación sola, el eje se ajusta a esa estación. |
-| **Horizontes rápidos** | *Últimas N h* reemplaza el inicio del período por la hora actual menos N; *próximas N h*, el fin por la hora actual más N. El máximo es 72 h: VIPNet entrega 72 h hacia atrás y el pronóstico se descarga para 4 días. |
+| **Horizontes rápidos** | Por defecto el período va de 72 h antes a 72 h después de la última hora completa (a las 9:58, desde las 9:00). *Últimas N h* reemplaza el inicio del período por la hora actual menos N; *próximas N h*, el fin por la hora actual más N. El máximo es 72 h: VIPNet entrega 72 h hacia atrás y el pronóstico se descarga para 4 días. |
 | **Descargas** | Los gráficos se redibujan en PNG (600 dpi) o PDF, con el período, la zona o estación y el modo de pronóstico elegidos. |
 
 Los datos se descargan al abrir la página y se guardan **una hora**; después

@@ -142,22 +142,25 @@ HORIZONTES = [12, 24, 36, 72]      # h; 72 = lo que cubren VIPNet (atrás) y el 
 with st.sidebar:
     st.markdown("### Ajustes")
     st.markdown("**Horizontes rápidos**")
+    # por defecto: 72 h hacia atrás y 72 h hacia adelante desde la hora actual
     atras = st.segmented_control("Hacia atrás (últimas)", HORIZONTES, key="atras",
-                                 format_func=lambda h: f"{h} h")
+                                 default=72, format_func=lambda h: f"{h} h")
     adelante = st.segmented_control("Hacia adelante (próximas)", HORIZONTES, key="adelante",
-                                    format_func=lambda h: f"{h} h")
-    st.caption("Sin horizonte elegido se usan las fechas del evento. "
+                                    default=72, format_func=lambda h: f"{h} h")
+    st.caption("Sin horizonte elegido se usan las fechas de abajo. "
                "Toca de nuevo un botón para quitarlo.")
-    st.markdown("**Fechas del evento**")
-    d0 = st.date_input("Inicio del evento", datetime(2026, 9, 22), disabled=bool(atras))
-    h0 = st.time_input("Hora de inicio", datetime(2026, 9, 22, 12, 0).time(),
-                       disabled=bool(atras))
-    d1 = st.date_input("Fin del evento", datetime(2026, 9, 25), disabled=bool(adelante))
+    # fechas a mano: parten de la última hora completa (p. ej. 9:58 -> 9:00)
     ya = pd.Timestamp(F.ahora_local()).floor("h")
+    st.markdown("**Fechas a mano**")
+    d0 = st.date_input("Día de inicio", ya.date(), disabled=bool(atras))
+    h0 = st.time_input("Hora de inicio", ya.time(), disabled=bool(atras))
+    fin0 = ya + pd.Timedelta(hours=72)
+    d1 = st.date_input("Día de fin", fin0.date(), disabled=bool(adelante))
+    h1 = st.time_input("Hora de fin", fin0.time(), disabled=bool(adelante))
     inicio = (ya - pd.Timedelta(hours=atras) if atras
               else pd.Timestamp(datetime.combine(d0, h0)))
     fin = (ya + pd.Timedelta(hours=adelante) if adelante
-           else pd.Timestamp(datetime.combine(d1, datetime.min.time())))
+           else pd.Timestamp(datetime.combine(d1, h1)))
     if fin <= inicio:
         st.error("El fin del período debe ser posterior al inicio.")
         st.stop()
@@ -223,17 +226,24 @@ with col_logo:
 
 sin_credencial = [e["nombre"] for e in F.ESTACIONES
                   if e["fuente"] == "dmc" and e["id"] not in series]
+# textos del período: "las últimas 72 h" / "para las próximas 72 h"
+h_atras = int(round((ahora - inicio) / pd.Timedelta(hours=1)))
+h_adelante = int(round((fin - ahora) / pd.Timedelta(hours=1)))
+TXT_ATRAS = (f"las últimas {h_atras} h" if h_atras > 0
+             else f"desde el {inicio:%d/%m %H:%M}")
+TXT_ADELANTE = (f"para las próximas {h_adelante} h" if h_adelante > 0
+                else "(el período ya terminó)")
 c = st.container(key="metricas").columns(3)
 for col, g in zip(c, F.GRUPOS):
     v = [totales[e["id"]][0] for e in activas if e["grupo"] == g]
     txt = "—" if not v else (f"{min(v):.0f}–{max(v):.0f}" if len(v) > 1
                              else f"{v[0]:.0f}")
     q10, q50, q90 = resto_grupo[g]
-    col.metric(f"{g.capitalize()} · observado* (mm)", txt,
-               f"faltan {q50:.0f} ({q10:.0f}–{q90:.0f}) desde las {ahora:%H} h",
+    col.metric(f"{g.capitalize()} · observado* {TXT_ATRAS} (mm)", txt,
+               f"Pronóstico de {q50:.0f} mm ({q10:.0f}–{q90:.0f}) {TXT_ADELANTE}",
                delta_color="off", delta_arrow="off",
-               help="Observado: rango entre las estaciones del grupo. Faltan: pronóstico "
-                    "desde ahora hasta el fin del período, mediana (p10–p90)."
+               help="Observado: rango entre las estaciones del grupo. Pronóstico: desde "
+                    "ahora hasta el fin del período, mediana (p10–p90)."
                     + ("" if v else " Estación de la DMC: requiere credenciales."))
 
 # ------------------------------------------------------------------ zona
@@ -565,7 +575,7 @@ datos_tarjeta = dict(
              min(v) if (v := [totales[e["id"]][0] for e in activas if e["grupo"] == g]) else None,
              max(v) if v else None, len(v))
             for g, colg in F.GRUPOS.items()],
-    lugar=lugar, resto=(r10, r50, r90), ts=ts, a10=a10, a50=a50, a90=a90,
+    lugar=lugar, txt_atras=TXT_ATRAS, txt_adelante=TXT_ADELANTE, resto=(r10, r50, r90), ts=ts, a10=a10, a50=a50, a90=a90,
     obs=[([inicio, *ev.hora_local], [0, *ev.mm.cumsum()], F.GRUPOS[est[i]["grupo"]])
          for i in ids_obs
          for ev in [series[i][(series[i].hora_local > inicio) & (series[i].hora_local <= fin)]]],
