@@ -1,0 +1,81 @@
+# Comprobación de pronósticos (uso interno). Una vez al día busca en el archivo
+# observado (rama `datos`) eventos de >= 50 mm en 4 días ya terminados y, para
+# cada uno nuevo, genera el informe en PDF y sus métricas en la rama
+# `verificacion` (tareas/verificar.py). No usa credenciales: los datos son
+# públicos (rama datos y Open-Meteo).
+#
+# A mano ("Run workflow"): se puede dar la ventana en hora de Chile.
+name: Verificación de pronósticos
+
+on:
+  schedule:
+    - cron: "23 15 * * *"        # todos los días, 15:23 UTC
+  workflow_dispatch:
+    inputs:
+      inicio:
+        description: "Inicio a mano, hora de Chile (AAAA-MM-DD HH:MM). Vacío = detección automática"
+        required: false
+      fin:
+        description: "Fin a mano, hora de Chile (AAAA-MM-DD HH:MM)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verificacion
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Código (main)
+        uses: actions/checkout@v4
+
+      - name: Archivo (rama datos)
+        uses: actions/checkout@v4
+        with:
+          ref: datos
+          path: archivo
+
+      - name: Informes (rama verificacion)
+        uses: actions/checkout@v4
+        with:
+          ref: verificacion
+          path: salida
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dependencias
+        run: |
+          sudo apt-get install -y -qq fonts-liberation > /dev/null
+          pip install requests pandas numpy pyarrow matplotlib reportlab pillow
+
+      - name: Buscar eventos y generar informes
+        env:
+          INICIO: ${{ github.event.inputs.inicio }}
+          FIN: ${{ github.event.inputs.fin }}
+        run: |
+          if [ -n "$INICIO" ] && [ -n "$FIN" ]; then
+            python tareas/verificar.py --archivo archivo --salida salida --inicio "$INICIO" --fin "$FIN"
+          else
+            python tareas/verificar.py --archivo archivo --salida salida
+          fi
+
+      - name: Guardar en la rama verificacion
+        working-directory: salida
+        run: |
+          git config user.name "verificacion-automatica"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Sin eventos nuevos"
+          else
+            git commit -q -m "Verificación $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git push -q origin HEAD:verificacion
+          fi

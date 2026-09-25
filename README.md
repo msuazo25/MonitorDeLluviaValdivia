@@ -73,6 +73,21 @@ el README de esa rama).
 - GitHub pausa las tareas programadas tras 60 días sin actividad en el
   repositorio; avisa por correo y se reactiva con un clic.
 
+## Comprobación de pronósticos (uso interno)
+
+Otra tarea (`.github/workflows/verificacion.yml`) corre una vez al día
+`tareas/verificar.py`, que usa el paquete `verificacion/`:
+
+- Busca en lo observado **eventos de 50 mm o más en 4 días** en alguna zona,
+  con la ventana desde que empezó a llover hasta el final (12 h secas cierran
+  el evento).
+- Para cada evento nuevo baja las corridas pasadas de seis modelos deterministas
+  (Open-Meteo Single Runs API) y usa los ensambles de la rama `datos`.
+- Genera un informe en PDF, figuras y `metricas_bloques.csv` en la rama
+  **`verificacion`**, con un `catalogo.csv` de todos los eventos.
+- Para una ventana a mano: *Actions → Verificación de pronósticos → Run workflow*
+  con inicio y fin en hora de Chile.
+
 ## Ajustes frecuentes
 
 - Estaciones, zonas y colores: `ESTACIONES` y `GRUPOS` en `fuentes.py`; íconos de
